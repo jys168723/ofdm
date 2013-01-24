@@ -24,14 +24,12 @@ namespace MatrixHelper {
         // Initialize output vector
         vector<vector<complex<T>>> out( in[0].size(), vector<complex<T>>(in.size()) );
         
-        cout<<"Transposed num rows: "<<out.size()<<", num cols: "<<out[0].size()<<endl;
-        
         for( uint iRow=0; iRow<out.size(); ++iRow ) {
             for( uint iCol=0; iCol<out[0].size(); ++iCol )
                 out[iRow][iCol]= conj(in[iCol][iRow]);
         }
         return out;
-    }
+    } // end conjTranspose2d()
     
     // Function accepts an MxN vector in and returns its NxM transpose
     template <typename T>
@@ -47,7 +45,7 @@ namespace MatrixHelper {
                 out[iRow][iCol]= in[iCol][iRow];
         }
         return out;
-    }
+    } // end transpose2d()
     
     // Function accepts a 2d vector and returns its MxN reshape
     // Vector must contain M*N elements
@@ -69,25 +67,8 @@ namespace MatrixHelper {
                 out[iRow][iCol]= in[iCol][iRow];
         }
         return out;
-    }
-    
-    // Function initializes a 2d vector
-    template <typename T>
-    extern void init2dMatrix(vector<vector<T>> &in, uint uNumRows, uint uNumCols ) {
-        in.resize(uNumRows);
-        for( uint iRow=0; iRow<uNumRows; ++iRow )
-            in[iRow].resize(uNumCols);
-    }
-    
-    // Function prints out the elements in a 2d vector
-    template <typename T>
-    extern void print2dMatrix(vector<vector<T>> &in ) {
-        for( uint iRow=0; iRow<in.size(); ++iRow ) {
-            cout<<endl;
-            for( uint iCol=0; iCol< in[0].size(); ++iCol ) 
-                cout<<static_cast<int>( in[iRow][iCol] )<<" ";
-        }
-    }
-}
+    } // end reshape2d()
+
+} // end namespace MatrixHelper
 
 #endif /* defined(__OFDM__MatrixHelper__) */

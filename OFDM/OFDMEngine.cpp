@@ -7,13 +7,10 @@
 //
 
 #include "OFDMEngine.h"
-#include "boost/multi_array.hpp"
 #include <complex>                  // Must include complex before fftw3 so fftw3 treats
 #include "api/fftw3.h"              // fftw3_complex as c++ complex
 #include <stdlib.h>
 #include <time.h>
-#include <exception>
-#include "expection_definitions.h"
 #include "MatrixHelper.h"
 
 using namespace std;
@@ -72,7 +69,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
         dataMatrix[0][iCol]= ceil( ( rand()/static_cast<float>(RAND_MAX) )*pow(2, SYMB_SIZE)+0.5f );
     }
     
-    // DEBUGGING
+    // DEBUGGING - manually setting diff ref to match Matlab's
     dataMatrix[0][0]=2;
     dataMatrix[0][1]=4;
     //dataMatrix[0][2]=4;
@@ -100,9 +97,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     //
     ////////////////////////////////////////////////
     
-    //complex_float_array complexMatrix(boost::extents[uCarrierSymbCount][CARRIER_COUNT]);
     vector<vector<complex<float>>> complexMatrix( uCarrierSymbCount, vector<complex<float>>( CARRIER_COUNT, 0));
-    //MatrixHelper::init2dMatrix(complexMatrix, uCarrierSymbCount, CARRIER_COUNT);
 
     for( uint iRow=0; iRow<complexMatrix.size(); ++iRow ) {
         for( uint iCol= 0; iCol<complexMatrix[0].size(); ++iCol ) {
@@ -128,13 +123,6 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     // Initialize 2D spectrum_tx array
     vector< vector<complex<double>> > spectrumTx( uCarrierSymbCount, vector<complex<double>>(IFFT_SIZE, 0));
     
-    cout<<endl<<"Carriers:"<<endl;
-    for( uint i=0; i<CARRIER_COUNT; ++i )
-        cout<<CARRIERS[i]<<", ";
-    cout<<endl<<"Conj carriers:"<<endl;
-    for( uint i=0; i<CARRIER_COUNT; ++i )
-        cout<<CONJ_CARRIERS[i]<<", ";
-    
     // Matlab: spectrum_tx(:,carriers) = complex_matrix;
     for( uint iRow=0; iRow<uCarrierSymbCount; ++iRow ) {
         for( uint iCol=0; iCol<CARRIER_COUNT; ++iCol ) {
@@ -156,30 +144,29 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     cout<<"Dimensions: "<<spectrumTx_transp.size()<<" x "<<spectrumTx_transp[0].size()<<endl;
     for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
         cout<<endl;
-        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {// CC = 3
-            spectrumTx_transp[iRow][iCol]= complex<double>( floor(spectrumTx_transp[iRow][iCol].real()), floor(spectrumTx_transp[iRow][iCol].imag()) );
+        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
             cout<<static_cast<int>(spectrumTx_transp[iRow][iCol].real())<<" + "<<static_cast<int>(spectrumTx_transp[iRow][iCol].imag())<<"i"<<"   ";
         }
     }
     
-    //complex<double> *in= &spectrumTx_transp[0][0];
-    double *out= (double*)fftw_malloc(sizeof(double)*2*spectrumTx_transp.size()*spectrumTx_transp[0].size());
+    complex<double> *in= &spectrumTx_transp[0][0];
+    double *out= (double*)malloc(sizeof(complex<double>)*uCarrierSymbCount*IFFT_SIZE);
     
-//    cout<<"IN: "<<endl;
-//    uNumIter= 0;
-//    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
-//        cout<<endl;
-//        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
-//            cout<<in[uNumIter].real()<<" + "<<in[uNumIter].imag()<<"i  ";
-//            ++uNumIter;
-//        }
-//    }
+    // DEBUGGING - print out IFFT input
+    cout<<"IN: "<<endl;
+    uNumIter= 0;
+    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
+        cout<<endl;
+        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
+            cout<<static_cast<int>(in[uNumIter].real())<<" + "<<static_cast<int>(in[uNumIter].imag())<<"i  ";
+            ++uNumIter;
+        }
+    }
     
-    fftw_plan p= fftw_plan_dft_c2r_2d((int)spectrumTx_transp.size(), (int)spectrumTx_transp[0].size(), (fftw_complex*)&spectrumTx_transp[0][0], out, FFTW_ESTIMATE);
+    // I believe this is where a mistake is being made
+    fftw_plan p= fftw_plan_dft_c2r_2d((int)spectrumTx_transp.size(), (int)spectrumTx_transp[0].size(), (fftw_complex*)in, out, FFTW_ESTIMATE);
     
     fftw_execute(p);
-    
-    fftw_destroy_plan(p);
     
     // DEBUGGING: print IFFT results
     cout<<"IFFT result: ";
@@ -190,14 +177,14 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
         }
     }
     
+    fftw_destroy_plan(p);
+    
     ///////////////////////////////////////////////////////////
     //
     //      Add a periodic guard time
     //
     ///////////////////////////////////////////////////////////
     
-    // MATLAB: end_symb = IFFT_SIZE
-
     vector< vector<double> > signalTx;
     signalTx.resize(uCarrierSymbCount);
     for( uint i=0; i<uCarrierSymbCount; ++i )

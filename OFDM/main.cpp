@@ -31,7 +31,7 @@ int main(int argc, const char * argv[])
         data[i]= static_cast<unsigned char>(i+1);
         cout<<i<<": "<<static_cast<float>(data[i])<<endl;
     }
-    unsigned char* pData= &data[0];//readDataFromFile( "/Users/Steve/Development/OFDM/OFDM/bitmap.bmp" );
+    unsigned char* pData= &data[0];
     
     long lModulatedData= 0;
     while( lModulatedData < lDataLength ) {
@@ -39,8 +39,6 @@ int main(int argc, const char * argv[])
         pEngine->Modulate( &pData[lModulatedData], lFrameLen );
         lModulatedData+= lFrameLen;
     }
-
-    //writeDataToFile( data, "/Users/Steve/Development/OFDM/OFDM/bitmap_new.bmp" );
     
     return 0;
 }

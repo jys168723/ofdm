@@ -54,7 +54,6 @@ inline static const uint* calculateCarriers() {
 static const uint* CARRIERS= calculateCarriers();
 
 inline static const uint* calculateConjCarriers() {
-    //uint conjCarriers[CARRIER_COUNT];
     uint* pConjCarriers= (uint*)malloc(sizeof(uint)*CARRIER_COUNT);
     
     for( uint i= 0; i<CARRIER_COUNT; ++i ) pConjCarriers[i]= IFFT_SIZE-CARRIERS[i]+2.0f;

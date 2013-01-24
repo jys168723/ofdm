@@ -25,7 +25,6 @@
 
 /* Begin PBXFileReference section */
 		AA00C30616A777D500571EFE /* ofdm_params.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ofdm_params.h; sourceTree = "<group>"; };
-		AA00C30E16A792BA00571EFE /* bitmap.bmp */ = {isa = PBXFileReference; lastKnownFileType = image.bmp; path = bitmap.bmp; sourceTree = "<group>"; };
 		AA00C31016A7CD9400571EFE /* OFDMEngine.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = OFDMEngine.cpp; sourceTree = "<group>"; };
 		AA00C31116A7CD9400571EFE /* OFDMEngine.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OFDMEngine.h; sourceTree = "<group>"; };
 		AA0DF67816AE388800DF1597 /* expection_definitions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = expection_definitions.h; sourceTree = "<group>"; };
@@ -64,7 +63,6 @@
 		AA753A2F16A5BDAD000A2B17 /* OFDM */ = {
 			isa = PBXGroup;
 			children = (
-				AA00C30E16A792BA00571EFE /* bitmap.bmp */,
 				AA753A3016A5BDAD000A2B17 /* main.cpp */,
 				AA00C30616A777D500571EFE /* ofdm_params.h */,
 				AA00C31016A7CD9400571EFE /* OFDMEngine.cpp */,
