@@ -206,6 +206,7 @@
 		AA753A3716A5BDAD000A2B17 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "lib/fftw-3.3.3";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -213,6 +214,7 @@
 		AA753A3816A5BDAD000A2B17 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "lib/fftw-3.3.3";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
