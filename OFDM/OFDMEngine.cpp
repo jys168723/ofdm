@@ -20,6 +20,13 @@ OFDMEngine::OFDMEngine() {
 }
 
 std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
+    cout<<"Carriers: "<<endl;
+    for( uint i=0; i<CARRIER_COUNT; ++i )
+        cout<<CARRIERS[i]<<", ";
+    cout<<"Conj Carriers: "<<endl;
+    for( uint i=0; i<CARRIER_COUNT; ++i )
+        cout<<CONJ_CARRIERS[i]<<", ";
+    
     // Symbols per carrier for this frame
     uint uCarrierSymbCount= ceil( lDataLength/CARRIER_COUNT );
     
@@ -149,35 +156,65 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
         }
     }
     
-    complex<double> *in= &spectrumTx_transp[0][0];
-    double *out= (double*)malloc(sizeof(complex<double>)*uCarrierSymbCount*IFFT_SIZE);
     
-    // DEBUGGING - print out IFFT input
-    cout<<"IN: "<<endl;
-    uNumIter= 0;
-    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
+    ///////////////////////////////////////////////////////////
+    //
+    //      FFT/IFFT
+    //
+    ///////////////////////////////////////////////////////////
+    
+    int nx= 1;//static_cast<int>( spectrumTx_transp.size() );
+    int nc= static_cast<int>( spectrumTx_transp[0].size() );
+    int ny= (nc*2)-1;
+    
+    fftw_complex *in= (fftw_complex*)fftw_malloc(nc*sizeof(fftw_complex));//&spectrumTx_transp[0][0];
+    double *out= (double*)fftw_malloc(ny*sizeof(double));
+    
+    // Populate in
+    cout<<"\n\nInput:";
+    for( uint i=0; i<nx; ++i ) {
         cout<<endl;
-        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
-            cout<<static_cast<int>(in[uNumIter].real())<<" + "<<static_cast<int>(in[uNumIter].imag())<<"i  ";
-            ++uNumIter;
+        for( uint j=0; j<nc; ++j ) {
+            in[i*nc+j][0]= floor( spectrumTx_transp[2][j].real() );
+            in[i*nc+j][1]= floor( spectrumTx_transp[2][j].imag() );
+            
+            // Print out input
+            cout<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<", ";
         }
     }
     
-    // I believe this is where a mistake is being made
-    fftw_plan p= fftw_plan_dft_c2r_2d((int)spectrumTx_transp.size(), (int)spectrumTx_transp[0].size(), (fftw_complex*)in, out, FFTW_ESTIMATE);
+    // Make c2r plan
+    fftw_plan ifftPlan= fftw_plan_dft_c2r_1d(nc, in, out, FFTW_ESTIMATE);
     
-    fftw_execute(p);
+    // Execute c2r plan
+    fftw_execute(ifftPlan);
     
-    // DEBUGGING: print IFFT results
-    cout<<"IFFT result: ";
-    for( uint iRow=0; iRow<uCarrierSymbCount; ++iRow ) {
-        cout<<endl;
-        for( uint iCol=0; iCol<IFFT_SIZE; ++iCol ) {
-            cout<<out[iRow*iCol]<<"    ";
+    // Print IFFT result
+    cout<<"\nIFFT result: ";
+    //double* ifftOutput= (double*)&in[0];
+    for( uint i=0; i<nx; ++i ) {
+        for( uint j=0; j<ny; ++j ) {
+            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
         }
     }
     
-    fftw_destroy_plan(p);
+    // Make r2c plan
+    fftw_plan fftPlan= fftw_plan_dft_r2c_1d(nc, out, (fftw_complex*)out, FFTW_ESTIMATE);
+    
+    // Execute r2c plan
+    fftw_execute(fftPlan);
+    
+    // Print FFT results
+    cout<<"\nFFT result: ";
+    for( uint i=0; i<nx; ++i ) {
+        for( uint j=0; j<nc; ++j ) {
+            cout<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<"i, ";
+        }
+    }
+    
+    fftw_destroy_plan(ifftPlan);
+    fftw_destroy_plan(fftPlan);
+    
     
     ///////////////////////////////////////////////////////////
     //
@@ -217,6 +254,70 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     return output;
 }
 
-void OFDMEngine::Demodulate( unsigned char *data, long lDataLength ) {
+void OFDMEngine::Demodulate( std::vector<double> *data, long lDataLength ) {
+    uint uSymbPeriod= IFFT_SIZE + GUARD_TIME;
+    
+    // Reshape the linear time waveform into FFT segments
+    uint uNumCol= floor( data->size()/(float)uSymbPeriod );
+    vector<vector<double>> symbRxMatrix(uSymbPeriod, vector<double>(uNumCol, 0));
+    
+    // TODO: Verify whether this should be a row or column-wise reshape
+    uint uNumIter= 0;
+    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
+        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
+            symbRxMatrix[iRow][iCol]= (*data)[uNumIter];
+        }
+    }
+    // Remove the periodic guard time
+}
+
+void OFDMEngine::FFTTest() {
+    // r2c - input size = n real numbers, output size = n/2+1 complex
+    // allocate enough memory in realIn for n/2+1= 5 complex numbers
+    int n= 8;
+    int nc= (n/2)+1;
+    double* realIn= (double*)fftw_malloc(sizeof(double)*n);
+    fftw_complex* complexOut= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nc);
+    
+    // Populate real input
+    for( uint i=0; i<n; ++i )
+        realIn[i]= i;    
+    
+    // Create fftw plans
+    fftw_plan fftPlan= fftw_plan_dft_r2c_1d(n, realIn, complexOut, FFTW_ESTIMATE);
+    
+    // Verification
+    cout<<"Input:"<<endl;
+    for( uint i=0; i<8; ++i )
+        cout<<realIn[i]<<", ";
+    cout<<endl;
+    
+    // Execute FFT
+    fftw_execute(fftPlan);
+    
+    // Print result
+    // 0th and n/2-th elements of the complex output are purely real
+    cout<<"FFT Result"<<endl;
+    for( uint i=0; i<nc; ++i ) {
+        cout<<complexOut[i][0]<<" + "<<complexOut[i][1]<<"i ";
+    }
+    cout<<endl;
+    
+    // Allocate IFFT in
+    //double* realOut= (double*)fftw_malloc(sizeof(fftw_complex)*nc);
+    double* in2= (double*)(fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nc);
+    
+    fftw_plan ifftPlan= fftw_plan_dft_c2r_1d(n, (fftw_complex*)complexOut, (double*)in2, FFTW_ESTIMATE);
+    
+    fftw_execute(ifftPlan);
+    
+    // Print IFFT results
+    cout<<"IFFT Results"<<endl;
+    for( uint i=0; i<n; ++i )
+        cout<<in2[i]/(double)(n)<<", ";
+    
+    fftw_free(realIn);
+    fftw_free(complexOut);
+    fftw_free(in2);
     
 }
