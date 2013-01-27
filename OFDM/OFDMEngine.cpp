@@ -167,9 +167,9 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     int nc= static_cast<int>( spectrumTx_transp[0].size() );
     int ny= (nc*2)-1;
     
-    fftw_complex *in= (fftw_complex*)fftw_malloc(nc*sizeof(fftw_complex));//&spectrumTx_transp[0][0];
-    double *out= (double*)fftw_malloc(ny*sizeof(double));
-    
+    fftw_complex *in= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));//&spectrumTx_transp[0][0];
+    double *out= (double*)fftw_malloc(nx*ny*sizeof(double));
+    fftw_complex *out2= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));
     // Populate in
     cout<<"\n\nInput:";
     for( uint i=0; i<nx; ++i ) {
@@ -184,7 +184,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     }
     
     // Make c2r plan
-    fftw_plan ifftPlan= fftw_plan_dft_c2r_1d(nc, in, out, FFTW_ESTIMATE);
+    fftw_plan ifftPlan= fftw_plan_dft_c2r_1d(ny, in, out, FFTW_ESTIMATE);
     
     // Execute c2r plan
     fftw_execute(ifftPlan);
@@ -199,7 +199,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     }
     
     // Make r2c plan
-    fftw_plan fftPlan= fftw_plan_dft_r2c_1d(nc, out, (fftw_complex*)out, FFTW_ESTIMATE);
+    fftw_plan fftPlan= fftw_plan_dft_r2c_1d(ny, out, out2, FFTW_ESTIMATE);
     
     // Execute r2c plan
     fftw_execute(fftPlan);
@@ -207,8 +207,9 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     // Print FFT results
     cout<<"\nFFT result: ";
     for( uint i=0; i<nx; ++i ) {
+        cout<<endl;
         for( uint j=0; j<nc; ++j ) {
-            cout<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<"i, ";
+            cout<<out2[i*nc+j][0]/ny<<" + "<<out2[i*nc+j][1]/ny<<", ";
         }
     }
     
