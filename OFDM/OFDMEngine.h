@@ -22,6 +22,7 @@ public:
     std::vector<double> Modulate( unsigned char* data, long lDataLength );
     void Demodulate( std::vector<double> *data, long lDataLength );
     void FFTTest();
+    void OFDMEngine::normalize( double &val );
 };
 
 #endif /* defined(__OFDM__OFDMEngine__) */

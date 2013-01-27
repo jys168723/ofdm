@@ -163,7 +163,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     //
     ///////////////////////////////////////////////////////////
     
-    int nx= 1;//static_cast<int>( spectrumTx_transp.size() );
+    int nx= static_cast<int>( spectrumTx_transp.size() );
     int nc= static_cast<int>( spectrumTx_transp[0].size() );
     int ny= (nc*2)-1;
     
@@ -175,8 +175,8 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     for( uint i=0; i<nx; ++i ) {
         cout<<endl;
         for( uint j=0; j<nc; ++j ) {
-            in[i*nc+j][0]= floor( spectrumTx_transp[2][j].real() );
-            in[i*nc+j][1]= floor( spectrumTx_transp[2][j].imag() );
+            in[i*nc+j][0]= floor( spectrumTx_transp[i][j].real() );
+            in[i*nc+j][1]= floor( spectrumTx_transp[i][j].imag() );
             
             // Print out input
             cout<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<", ";
@@ -184,22 +184,21 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     }
     
     // Make c2r plan
-    fftw_plan ifftPlan= fftw_plan_dft_c2r_1d(ny, in, out, FFTW_ESTIMATE);
+    fftw_plan ifftPlan= fftw_plan_dft_c2r_2d(nx, ny, in, out, FFTW_ESTIMATE);
     
     // Execute c2r plan
     fftw_execute(ifftPlan);
     
     // Print IFFT result
-    cout<<"\nIFFT result: ";
-    //double* ifftOutput= (double*)&in[0];
-    for( uint i=0; i<nx; ++i ) {
-        for( uint j=0; j<ny; ++j ) {
-            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
-        }
-    }
+//    cout<<"\nIFFT result: ";
+//    for( uint i=0; i<nx; ++i ) {
+//        for( uint j=0; j<ny; ++j ) {
+//            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
+//        }
+//    }
     
     // Make r2c plan
-    fftw_plan fftPlan= fftw_plan_dft_r2c_1d(ny, out, out2, FFTW_ESTIMATE);
+    fftw_plan fftPlan= fftw_plan_dft_r2c_2d(nx, ny, out, out2, FFTW_ESTIMATE);
     
     // Execute r2c plan
     fftw_execute(fftPlan);
@@ -209,7 +208,11 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     for( uint i=0; i<nx; ++i ) {
         cout<<endl;
         for( uint j=0; j<nc; ++j ) {
-            cout<<out2[i*nc+j][0]/ny<<" + "<<out2[i*nc+j][1]/ny<<", ";
+            double real= out2[i*nc+j][0]/(nx*ny);
+            double imag= out2[i*nc+j][1]/(nx*ny);
+            normalize(real);
+            normalize(imag);
+            cout<<(int)real<<" + "<<(int)imag<<", ";
         }
     }
     
@@ -321,4 +324,9 @@ void OFDMEngine::FFTTest() {
     fftw_free(complexOut);
     fftw_free(in2);
     
+}
+
+void OFDMEngine::normalize( double &val ) {
+    if( val < 0.000001 && val > -0.000001 )
+        val= 0;
 }
