@@ -19,7 +19,10 @@ OFDMEngine::OFDMEngine() {
     
 }
 
-std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
+// Function takes in byte data, modulates it, and returns a pointer to the
+// modulated, double-precision data
+vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
+    // Print out carriers
     cout<<"Carriers: "<<endl;
     for( uint i=0; i<CARRIER_COUNT; ++i )
         cout<<CARRIERS[i]<<", ";
@@ -169,7 +172,7 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     
     fftw_complex *in= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));//&spectrumTx_transp[0][0];
     double *out= (double*)fftw_malloc(nx*ny*sizeof(double));
-    fftw_complex *out2= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));
+
     // Populate in
     cout<<"\n\nInput:";
     for( uint i=0; i<nx; ++i ) {
@@ -188,36 +191,40 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     
     // Execute c2r plan
     fftw_execute(ifftPlan);
+    // Destroy c2r plan
+    fftw_destroy_plan(ifftPlan);
     
+    // DEBUGGING: IFFT/FFT Verification
     // Print IFFT result
-//    cout<<"\nIFFT result: ";
-//    for( uint i=0; i<nx; ++i ) {
-//        for( uint j=0; j<ny; ++j ) {
-//            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
-//        }
-//    }
-    
-    // Make r2c plan
-    fftw_plan fftPlan= fftw_plan_dft_r2c_2d(nx, ny, out, out2, FFTW_ESTIMATE);
-    
-    // Execute r2c plan
-    fftw_execute(fftPlan);
-    
-    // Print FFT results
-    cout<<"\nFFT result: ";
+    cout<<"\nIFFT result: ";
     for( uint i=0; i<nx; ++i ) {
         cout<<endl;
-        for( uint j=0; j<nc; ++j ) {
-            double real= out2[i*nc+j][0]/(nx*ny);
-            double imag= out2[i*nc+j][1]/(nx*ny);
-            normalize(real);
-            normalize(imag);
-            cout<<(int)real<<" + "<<(int)imag<<", ";
+        for( uint j=0; j<ny; ++j ) {
+            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
         }
     }
     
-    fftw_destroy_plan(ifftPlan);
-    fftw_destroy_plan(fftPlan);
+//
+//    fftw_complex *out2= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));
+//    // Make r2c plan
+//    fftw_plan fftPlan= fftw_plan_dft_r2c_2d(nx, ny, out, out2, FFTW_ESTIMATE);
+//    
+//    // Execute r2c plan
+//    fftw_execute(fftPlan);
+//    
+//    // Print FFT results
+//    cout<<"\nFFT result: ";
+//    for( uint i=0; i<nx; ++i ) {
+//        cout<<endl;
+//        for( uint j=0; j<nc; ++j ) {
+//            double real= out2[i*nc+j][0]/(nx*ny);
+//            double imag= out2[i*nc+j][1]/(nx*ny);
+//            normalize(real);
+//            normalize(imag);
+//            cout<<(int)real<<" + "<<(int)imag<<", ";
+//        }
+//    }
+//    fftw_destroy_plan(fftPlan);
     
     
     ///////////////////////////////////////////////////////////
@@ -225,40 +232,47 @@ std::vector<double> OFDMEngine::Modulate( unsigned char *pData, long lDataLength
     //      Add a periodic guard time
     //
     ///////////////////////////////////////////////////////////
+//    
+//    vector< vector<double> > signalTx;
+//    signalTx.resize(uCarrierSymbCount);
+//    for( uint i=0; i<uCarrierSymbCount; ++i )
+//        signalTx[i].resize(IFFT_SIZE+GUARD_TIME);
+//    
+//    // Populate signalTx
+//    for( uint iRow=0; iRow<uCarrierSymbCount; ++iRow ) {
+//        for( uint iCol=0; iCol<IFFT_SIZE+GUARD_TIME; ++iCol ) {
+//            if( iCol < GUARD_TIME )
+//                signalTx[iRow][iCol]= out[iRow*(IFFT_SIZE-GUARD_TIME+iCol)];
+//            else
+//                signalTx[iRow][iCol]= out[iRow*(iCol-GUARD_TIME)];
+//        }
+//    }
+//    
+//    // Transpose signalTx
+//    signalTx= MatrixHelper::transpose2d(signalTx);
     
-    vector< vector<double> > signalTx;
-    signalTx.resize(uCarrierSymbCount);
-    for( uint i=0; i<uCarrierSymbCount; ++i )
-        signalTx[i].resize(IFFT_SIZE+GUARD_TIME);
-    
-    // Populate signalTx
-    for( uint iRow=0; iRow<uCarrierSymbCount; ++iRow ) {
-        for( uint iCol=0; iCol<IFFT_SIZE+GUARD_TIME; ++iCol ) {
-            if( iCol < GUARD_TIME )
-                signalTx[iRow][iCol]= out[iRow*(IFFT_SIZE-GUARD_TIME+iCol)];
-            else
-                signalTx[iRow][iCol]= out[iRow*(iCol-GUARD_TIME)];
-        }
-    }
-    
-    // Transpose signalTx
-    signalTx= MatrixHelper::transpose2d(signalTx);
-    
-    // Reshape along columns
+    // Reshape output along columns into 1d vector
     // i.e.
     // 1 2 3 ---> 1 4 2 5 3 6
     // 4 5 6
-    vector<double> output;
-    output.resize(signalTx.size()*signalTx[0].size());
-    for( uint iRow=0; iRow<signalTx.size(); ++iRow ) {
-        for( uint iCol=0; iCol<signalTx[0].size(); ++iCol ) {
-            output[iRow*iCol]= signalTx[iRow][iCol];
+    vector<double> output(nx*ny, 0);
+    for( uint iCol=0; iCol<ny; ++iCol ) {
+        for( uint iRow=0; iRow<nx; ++iRow ) {
+            output[iCol*ny+iRow]= out[ny*iRow+iCol];
         }
     }
-    return output;
+    
+    // DEBUGGING: Print output
+//    cout<<"\nReshaped IFFT Result: ";
+//    for( uint i= 0; i<output.size(); ++i ) {
+//        cout<<output[i]/(double)(nx*ny)<<", ";
+//    }
+    
+    return (vector<double>*)&output[0];
 }
 
 void OFDMEngine::Demodulate( std::vector<double> *data, long lDataLength ) {
+   
     uint uSymbPeriod= IFFT_SIZE + GUARD_TIME;
     
     // Reshape the linear time waveform into FFT segments
@@ -268,9 +282,8 @@ void OFDMEngine::Demodulate( std::vector<double> *data, long lDataLength ) {
     // TODO: Verify whether this should be a row or column-wise reshape
     uint uNumIter= 0;
     for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
-        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
+        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol )
             symbRxMatrix[iRow][iCol]= (*data)[uNumIter];
-        }
     }
     // Remove the periodic guard time
 }
@@ -326,7 +339,69 @@ void OFDMEngine::FFTTest() {
     
 }
 
+double OFDMEngine::FrameDetect( std::vector<double>* data ) {
+    // Take abs of data
+    vector<double> signal( data->size(), 0 );
+    for( uint i=0; i<data->size(); ++i )
+        signal[i]= abs( (*data)[i] );
+    
+    // Sampled version of the signal
+    vector<double> sampSignal( ceil(signal.size()/(float)ENVELOPE), 0 );
+    for( uint i=0; i<sampSignal.size(); ++i )
+        sampSignal[i]= signal[i*ENVELOPE];
+    
+    return 0;
+} // end OFDMEngine::FrameDetect()
+
+
+// Function generates a header and trailer (exact copy of the header)
+vector<double>* OFDMEngine::GenerateHeader() {
+    vector<double> header( 2*(IFFT_SIZE+GUARD_TIME), 0 );
+    double f= 0.25;
+    for( uint i=0; i<IFFT_SIZE+GUARD_TIME; ++i ) {
+        header[i]= sin(i*2*M_PI*f);
+    }
+    
+    f= f/(M_PI*2.0/3.0);
+    for( uint i= IFFT_SIZE+GUARD_TIME; i<2*(IFFT_SIZE+GUARD_TIME); ++i ) {
+        header[i]= sin(i*2*M_PI*f);
+    }
+    
+    return (vector<double>*)&header[0];
+} // end OFDMEngine::GenerateHeader()
+
+
+// Function "normalizes" low numbers to 0
 void OFDMEngine::normalize( double &val ) {
-    if( val < 0.000001 && val > -0.000001 )
+    if( abs(val) < 0.000001 )
         val= 0;
-}
+} // end OFDMEngine::normalize()
+
+
+///////////////////////////////////////////////////////////////////////////////////////
+//
+// Implementation of matlab's filter() function, which is described
+// by the difference equation:
+//
+// a(1)y(n) = b(1)x(n) + b(2)x(n-1) + ... + b(Nb)x(n-Nb+1)
+// - a(2)y(n-1) - ... - a(Na)y(n-Na+1)
+//
+// For our purposes, we only need a to be a scalar, therefore
+// y(n) = [b(1)x(n) + b(2)x(n-1) + ... + b(Nb)x(n-Nb+1)]/a
+//
+// Note: matlab vectors are 1-indexed
+///////////////////////////////////////////////////////////////////////////////////////
+
+vector<double> OFDMEngine::filter( vector<double> &b, double a, vector<double> &x ) {
+    vector<double> y( x.size(), 0 );
+    // 20 - 5 + 1
+    for( int iy=0; iy<y.size(); ++iy ) {
+        double val= 0;
+        for( int ib=0; ib<b.size(); ++ib ) {
+            if( iy-ib >= 0 )
+                val= val + b[ib]*x[iy-ib];
+        }
+        y[iy]= val / a;
+    }
+    return y;
+} // end OFDMEngine::filter()

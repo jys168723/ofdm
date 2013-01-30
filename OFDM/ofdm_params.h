@@ -24,7 +24,7 @@ static const uint SYMB_PER_FRAME=           // Number of symbols per carrier in 
 static const uint SYMB_PERIOD=              // Length of one symbol period including guard time
     IFFT_SIZE + GUARD_TIME;
 static const uint HEAD_LEN= SYMB_PERIOD*8;  // Length of header and trailer of the transmitted data
-static const uint ENVELOPE_SIZE=            // Size of the envelope detector
+static const uint ENVELOPE=                 // Size of the envelope detector
     ceil(SYMB_PERIOD/256)+1;
 
 // More elegant way of doing this?

@@ -16,13 +16,20 @@
 #include <complex>
 #define _USE_MATH_DEFINES
 
+using namespace std;
+
 class OFDMEngine {
 public:
     OFDMEngine();
-    std::vector<double> Modulate( unsigned char* data, long lDataLength );
+    vector<double>* Modulate( unsigned char* data, long lDataLength );
     void Demodulate( std::vector<double> *data, long lDataLength );
+    double FrameDetect( std::vector<double>* data );
     void FFTTest();
-    void OFDMEngine::normalize( double &val );
+    vector<double>* GenerateHeader();
+
+//private:
+    void normalize( double &val );
+    vector<double> filter( vector<double> &b, double a, vector<double> &x );
 };
 
 #endif /* defined(__OFDM__OFDMEngine__) */
