@@ -11,7 +11,9 @@
 #include "api/fftw3.h"              // fftw3_complex as c++ complex
 #include <stdlib.h>
 #include <time.h>
+#include <algorithm>
 #include "MatrixHelper.h"
+#include "MathHelper.h"
 
 using namespace std;
 
@@ -21,7 +23,7 @@ OFDMEngine::OFDMEngine() {
 
 // Function takes in byte data, modulates it, and returns a pointer to the
 // modulated, double-precision data
-vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
+vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     // Print out carriers
     cout<<"Carriers: "<<endl;
     for( uint i=0; i<CARRIER_COUNT; ++i )
@@ -31,7 +33,7 @@ vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
         cout<<CONJ_CARRIERS[i]<<", ";
     
     // Symbols per carrier for this frame
-    uint uCarrierSymbCount= ceil( lDataLength/CARRIER_COUNT );
+    uint uCarrierSymbCount= ceil( iDataLength/CARRIER_COUNT );
     
     // 2D array
     vector<vector<unsigned char>> dataMatrix( uCarrierSymbCount+1, vector<unsigned char>(CARRIER_COUNT, 0) );
@@ -44,7 +46,7 @@ vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
             if( iRow == 0 )
                 dataMatrix[iRow][iCol]= 0;
             // If we run out of data, populate remainder of array with 0s
-            else if( uNumIter-dataMatrix[0].size()+1 > lDataLength )
+            else if( uNumIter-dataMatrix[0].size()+1 > iDataLength )
                 dataMatrix[iRow][iCol]= 0;
             else
                 dataMatrix[iRow][iCol]= static_cast<unsigned char>( pData[uNumIter-dataMatrix[0].size()] );
@@ -80,8 +82,8 @@ vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
     }
     
     // DEBUGGING - manually setting diff ref to match Matlab's
-    dataMatrix[0][0]=2;
-    dataMatrix[0][1]=4;
+    dataMatrix[0][0]=4;
+    dataMatrix[0][1]=1;
     //dataMatrix[0][2]=4;
     //dataMatrix[0][3]=4;
     
@@ -93,13 +95,13 @@ vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
     }
     
     // DEBUGGING: print out matrix
-    cout<<"2D Array: After differential encoding";
-    for( uint iRow= 0; iRow< uCarrierSymbCount; ++iRow ) {
-        cout<<endl;
-        for( uint iCol= 0; iCol< CARRIER_COUNT; ++iCol ) {
-            cout<<static_cast<float>(dataMatrix[iRow][iCol])<<"   ";
-        }
-    }
+//    cout<<"2D Array: After differential encoding";
+//    for( uint iRow= 0; iRow< uCarrierSymbCount; ++iRow ) {
+//        cout<<endl;
+//        for( uint iCol= 0; iCol< CARRIER_COUNT; ++iCol ) {
+//            cout<<static_cast<float>(dataMatrix[iRow][iCol])<<"   ";
+//        }
+//    }
     
     ////////////////////////////////////////////////
     //
@@ -146,146 +148,237 @@ vector<double>* OFDMEngine::Modulate( unsigned char *pData, long lDataLength ) {
         }
     }
     
+    // DEBUGGING: Print out matrix
+    //cout<<"After assign IFFT bins:";
+    for( uint iRow=0; iRow<spectrumTx.size(); ++iRow ) {
+        //cout<<endl;
+        //cout<<"Row "<<iRow<<": ";
+        for( uint iCol=0; iCol<spectrumTx[0].size(); ++iCol ) {
+            double real= spectrumTx[iRow][iCol].real();
+            double imag= spectrumTx[iRow][iCol].imag();
+            normalize(real);
+            normalize(imag);
+            spectrumTx[iRow][iCol]= complex<double>(real, imag);
+            //cout<<real<<" + "<<imag<<"i, ";
+        }
+    }
+    
     // Perform IFFT on conjugate transpose of spectrumTx
     vector< vector<complex<double>> > spectrumTx_transp= MatrixHelper::conjTranspose2d<double>(spectrumTx);
     
     // DEBUGGING: print out matrix
-    cout<<endl<<"Spectrum tx' pre ifft: "<<endl;
-    cout<<"Dimensions: "<<spectrumTx_transp.size()<<" x "<<spectrumTx_transp[0].size()<<endl;
-    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
-        cout<<endl;
-        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
-            cout<<static_cast<int>(spectrumTx_transp[iRow][iCol].real())<<" + "<<static_cast<int>(spectrumTx_transp[iRow][iCol].imag())<<"i"<<"   ";
-        }
-    }
+//    cout<<endl<<"Spectrum tx' pre ifft: "<<endl;
+//    cout<<"Dimensions: "<<spectrumTx_transp.size()<<" x "<<spectrumTx_transp[0].size()<<endl;
+//    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
+//        cout<<endl;
+//        cout<<"Row "<<iRow<<": ";
+//        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
+//            cout<<spectrumTx_transp[iRow][iCol].real()<<" + "<<spectrumTx_transp[iRow][iCol].imag()<<", ";
+//        }
+//    }
     
     
     ///////////////////////////////////////////////////////////
     //
-    //      FFT/IFFT
+    //      IFFT
     //
     ///////////////////////////////////////////////////////////
     
     int nx= static_cast<int>( spectrumTx_transp.size() );
     int nc= static_cast<int>( spectrumTx_transp[0].size() );
-    int ny= (nc*2)-1;
-    
-    fftw_complex *in= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));//&spectrumTx_transp[0][0];
-    double *out= (double*)fftw_malloc(nx*ny*sizeof(double));
 
+    fftw_complex *in;
+    in= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nx*nc);
+    
+    // Perform IFFT in-place
+    fftw_plan p= fftw_plan_dft_2d(nx, nc, in, in, FFTW_BACKWARD, FFTW_ESTIMATE);
+    
     // Populate in
-    cout<<"\n\nInput:";
+    //cout<<"\n\nInput:";
     for( uint i=0; i<nx; ++i ) {
-        cout<<endl;
+        //cout<<endl;
+        //cout<<"Row "<<i<<": ";
         for( uint j=0; j<nc; ++j ) {
-            in[i*nc+j][0]= floor( spectrumTx_transp[i][j].real() );
-            in[i*nc+j][1]= floor( spectrumTx_transp[i][j].imag() );
+            in[i*nc+j][0]= spectrumTx_transp[i][j].real();
+            in[i*nc+j][1]= spectrumTx_transp[i][j].imag();
             
             // Print out input
-            cout<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<", ";
+            //cout<<i*nc+j<<": "<<in[i*nc+j][0]<<" + "<<in[i*nc+j][1]<<", ";
         }
     }
+
+    // Execute IFFT
+    fftw_execute(p);
     
-    // Make c2r plan
-    fftw_plan ifftPlan= fftw_plan_dft_c2r_2d(nx, ny, in, out, FFTW_ESTIMATE);
-    
-    // Execute c2r plan
-    fftw_execute(ifftPlan);
-    // Destroy c2r plan
-    fftw_destroy_plan(ifftPlan);
-    
-    // DEBUGGING: IFFT/FFT Verification
-    // Print IFFT result
-    cout<<"\nIFFT result: ";
+    // signal_tx = real(in)
+    vector<vector<double>> signal_tx( nx, vector<double>(nc, 0) );
     for( uint i=0; i<nx; ++i ) {
-        cout<<endl;
-        for( uint j=0; j<ny; ++j ) {
-            cout<<out[i*ny+j]/(double)(nx*ny)<<", ";
+        for( uint j=0; j<nc; ++j ) {
+            signal_tx[i][j]= in[i*nc+j][0];
         }
     }
     
-//
-//    fftw_complex *out2= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));
-//    // Make r2c plan
-//    fftw_plan fftPlan= fftw_plan_dft_r2c_2d(nx, ny, out, out2, FFTW_ESTIMATE);
-//    
-//    // Execute r2c plan
-//    fftw_execute(fftPlan);
-//    
-//    // Print FFT results
-//    cout<<"\nFFT result: ";
+    // DEBUGGING: Verify IFFT by taking FFT
+//    fftw_complex *out;
+//    out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nx*nc);
+//    fftw_plan p2 = fftw_plan_dft_2d(nx, nc, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+//    fftw_execute(p2);
+//   
+//    cout<<"Output:"<<endl;
 //    for( uint i=0; i<nx; ++i ) {
 //        cout<<endl;
+//        cout<<"Row "<<i<<": ";
 //        for( uint j=0; j<nc; ++j ) {
-//            double real= out2[i*nc+j][0]/(nx*ny);
-//            double imag= out2[i*nc+j][1]/(nx*ny);
+//            double real= out[i*nc+j][0]/(nx*nc);
+//            double imag= out[i*nc+j][1]/(nx*nc);
 //            normalize(real);
 //            normalize(imag);
-//            cout<<(int)real<<" + "<<(int)imag<<", ";
+//            cout<<real<<" + "<<imag<<"i, ";
+//            //cout<<out[i*nc+j][0]/(nx*nc)<<" + "<<out[i*nc+j][1]<<", ";
 //        }
 //    }
-//    fftw_destroy_plan(fftPlan);
     
+    // Transpose signal_tx
+    signal_tx= MatrixHelper::transpose2d<double>( signal_tx );
     
     ///////////////////////////////////////////////////////////
     //
     //      Add a periodic guard time
     //
     ///////////////////////////////////////////////////////////
-//    
-//    vector< vector<double> > signalTx;
-//    signalTx.resize(uCarrierSymbCount);
-//    for( uint i=0; i<uCarrierSymbCount; ++i )
-//        signalTx[i].resize(IFFT_SIZE+GUARD_TIME);
-//    
-//    // Populate signalTx
-//    for( uint iRow=0; iRow<uCarrierSymbCount; ++iRow ) {
-//        for( uint iCol=0; iCol<IFFT_SIZE+GUARD_TIME; ++iCol ) {
-//            if( iCol < GUARD_TIME )
-//                signalTx[iRow][iCol]= out[iRow*(IFFT_SIZE-GUARD_TIME+iCol)];
-//            else
-//                signalTx[iRow][iCol]= out[iRow*(iCol-GUARD_TIME)];
+    
+    // Print matrix
+//    cout<<"Matrix without guard time:";
+//    for( uint i=0; i<signal_tx.size(); ++i ) {
+//        cout<<endl<<"Row "<<i<<": ";
+//        for( uint j=0; j<signal_tx[0].size(); ++j ) {
+//            cout<<signal_tx[i][j]<<", ";
 //        }
 //    }
-//    
-//    // Transpose signalTx
-//    signalTx= MatrixHelper::transpose2d(signalTx);
     
-    // Reshape output along columns into 1d vector
-    // i.e.
-    // 1 2 3 ---> 1 4 2 5 3 6
-    // 4 5 6
-    vector<double> output(nx*ny, 0);
-    for( uint iCol=0; iCol<ny; ++iCol ) {
-        for( uint iRow=0; iRow<nx; ++iRow ) {
-            output[iCol*ny+iRow]= out[ny*iRow+iCol];
+    // Prepend columns (last_col - GUARD_TIME : last_col) to signal_tx
+    // TODO: There is probably a better way to do this
+    vector<vector<double>> prepend_matrix( signal_tx.size(), vector<double>(GUARD_TIME, 0) );
+    for( uint i=0; i<prepend_matrix.size(); ++i ) {
+        for( uint j=0; j<prepend_matrix[0].size(); ++j )
+            prepend_matrix[i][j]= signal_tx[i][signal_tx[0].size()-GUARD_TIME+j];
+    }
+    
+    for( uint i=0; i<signal_tx.size(); ++i ) {
+        signal_tx[i].reserve( signal_tx[i].size()+GUARD_TIME );
+        for( uint j=0; j<GUARD_TIME; ++j )
+            signal_tx[i].insert( signal_tx[i].begin()+j, prepend_matrix[i][j] );
+    }
+    
+    signal_tx= MatrixHelper::transpose2d<double>( signal_tx );
+    
+    // Print matrix
+    cout<<"Signal tx transp:";
+    for( uint i=0; i<signal_tx.size(); ++i ) {
+        cout<<endl<<"Row "<<i<<": ";
+        for( uint j=0; j<signal_tx[0].size(); ++j ) {
+            cout<<signal_tx[i][j]<<", ";
+        }
+    }
+        
+    vector<double> signal_tx_1d( signal_tx.size()*signal_tx[0].size(), 0 );
+    // Populate signal_tx_1d column-wise
+    uNumIter= 0;
+    for( uint j=0; j<signal_tx[0].size(); ++j ) {
+        for( uint i=0; i<signal_tx.size(); ++i ) {
+            signal_tx_1d[uNumIter]=signal_tx[i][j];
+            ++uNumIter;
         }
     }
     
-    // DEBUGGING: Print output
-//    cout<<"\nReshaped IFFT Result: ";
-//    for( uint i= 0; i<output.size(); ++i ) {
-//        cout<<output[i]/(double)(nx*ny)<<", ";
-//    }
+//    cout<<"Signal tx 1d"<<endl;
+//    for( uint i=0; i<signal_tx_1d.size(); ++i )
+//        cout<<signal_tx_1d[i]<<", ";
     
-    return (vector<double>*)&output[0];
+    return signal_tx_1d;
 }
 
-void OFDMEngine::Demodulate( std::vector<double> *data, long lDataLength ) {
+void OFDMEngine::Demodulate( std::vector<double> *symbRx ) {
    
     uint uSymbPeriod= IFFT_SIZE + GUARD_TIME;
     
     // Reshape the linear time waveform into FFT segments
-    uint uNumCol= floor( data->size()/(float)uSymbPeriod );
+    uint uNumCol= floor( symbRx->size()/(float)uSymbPeriod );
     vector<vector<double>> symbRxMatrix(uSymbPeriod, vector<double>(uNumCol, 0));
-    
-    // TODO: Verify whether this should be a row or column-wise reshape
+
     uint uNumIter= 0;
-    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
-        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol )
-            symbRxMatrix[iRow][iCol]= (*data)[uNumIter];
+    for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
+        for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
+            symbRxMatrix[iRow][iCol]= (*symbRx)[uNumIter];
+            ++uNumIter;
+        }
     }
+    
+    // DEBUGGING: Print out matrix
+    cout<<"SymbRxMatrix:";
+    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
+        cout<<endl;
+        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
+            cout<<symbRxMatrix[iRow][iCol]<<", ";
+        }
+    }
+    
     // Remove the periodic guard time
+    for( uint i=0; i<GUARD_TIME; ++i )
+        symbRxMatrix.erase( symbRxMatrix.begin() );
+    
+    // DEBUGGING: Print out matrix
+    cout<<"SymbRxMatrix:";
+    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
+        cout<<endl;
+        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
+            cout<<symbRxMatrix[iRow][iCol]<<", ";
+        }
+    }
+    
+    // Take FFT of the received time wave to obtain data spectrum
+    int nc= static_cast<int>( symbRxMatrix[0].size()/2.0f + 1 );
+    int ny= static_cast<int>( symbRxMatrix[0].size() );
+    int nx= static_cast<int>( symbRxMatrix.size() );
+    fftw_complex *fftResult= (fftw_complex*)fftw_malloc( nc*nx*sizeof(fftw_complex) );
+    double *fftInput= (double*)&symbRxMatrix;
+    
+    fftw_plan fftPlan= fftw_plan_dft_r2c_2d( nx, ny, fftInput, fftResult, FFTW_ESTIMATE );
+    fftw_execute(fftPlan);
+    
+    // Print FFT results
+    cout<<"\nFFT result: ";
+    for( uint i=0; i<nx; ++i ) {
+        cout<<endl;
+        for( uint j=0; j<ny; ++j ) {
+            double real= fftResult[i*nc+j][0]/(nx*ny);
+            double imag= fftResult[i*nc+j][1]/(nx*ny);
+            normalize(real);
+            normalize(imag);
+            cout<<real<<" + "<<imag<<", ";
+        }
+    }
+    
+    //    fftw_complex *out2= (fftw_complex*)fftw_malloc(nx*nc*sizeof(fftw_complex));
+    //    // Make r2c plan
+    //    fftw_plan fftPlan= fftw_plan_dft_r2c_2d(nx, ny, out, out2, FFTW_ESTIMATE);
+    //
+    //    // Execute r2c plan
+    //    fftw_execute(fftPlan);
+    //
+    //    // Print FFT results
+    //    cout<<"\nFFT result: ";
+    //    for( uint i=0; i<nx; ++i ) {
+    //        cout<<endl;
+    //        for( uint j=0; j<nc; ++j ) {
+    //            double real= out2[i*nc+j][0]/(nx*ny);
+    //            double imag= out2[i*nc+j][1]/(nx*ny);
+    //            normalize(real);
+    //            normalize(imag);
+    //            cout<<(int)real<<" + "<<(int)imag<<", ";
+    //        }
+    //    }
+    //    fftw_destroy_plan(fftPlan);
 }
 
 void OFDMEngine::FFTTest() {
@@ -350,12 +443,34 @@ double OFDMEngine::FrameDetect( std::vector<double>* data ) {
     for( uint i=0; i<sampSignal.size(); ++i )
         sampSignal[i]= signal[i*ENVELOPE];
     
+    vector<double> ones( round(SYMB_PERIOD/static_cast<double>(ENVELOPE)), 1 );
+    vector<double> movSum= filter( ones, 1, sampSignal );
+    movSum.erase( movSum.begin(), movSum.begin()+round(SYMB_PERIOD/static_cast<double>(ENVELOPE)) );
+    
+    double minElement= *min_element( movSum.begin(), movSum.end() );
+    double apprx= minElement*ENVELOPE+SYMB_PERIOD;
+
+    // Move back by approximately 110% of the symbol period to start searching
+    uint idxStart= round( apprx-1.1*SYMB_PERIOD );
+    
+    // Look into the narrowed down window
+    // Matlab: mov_sum = filter(ones(1,symb_period),1,signal(idx_start:round(apprx+symb_period/3)));
+    ones.resize( SYMB_PERIOD );
+    //generate( ones.begin(), ones.end(), 1 ); // Populates ones with ones
+    movSum.resize( round(apprx+SYMB_PERIOD/3.0f) );
+    signal.erase( signal.begin(), signal.begin()+idxStart );
+    signal.erase( signal.begin()+round(apprx+SYMB_PERIOD/3.0f), signal.end() );
+    movSum= filter( ones, 1, signal );
+    movSum.erase( movSum.begin(), movSum.begin()+SYMB_PERIOD );
+    
+    double nullSig= *min_element( movSum.begin(), movSum.end() );
+    //double startSymb= min( )
     return 0;
 } // end OFDMEngine::FrameDetect()
 
 
 // Function generates a header and trailer (exact copy of the header)
-vector<double>* OFDMEngine::GenerateHeader() {
+vector<double> OFDMEngine::GenerateHeader() {
     vector<double> header( 2*(IFFT_SIZE+GUARD_TIME), 0 );
     double f= 0.25;
     for( uint i=0; i<IFFT_SIZE+GUARD_TIME; ++i ) {
@@ -367,7 +482,7 @@ vector<double>* OFDMEngine::GenerateHeader() {
         header[i]= sin(i*2*M_PI*f);
     }
     
-    return (vector<double>*)&header[0];
+    return header;
 } // end OFDMEngine::GenerateHeader()
 
 

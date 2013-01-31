@@ -35,7 +35,6 @@ int main(int argc, const char * argv[])
     cout<<"b:"<<endl;
     for( uint i=0; i<b.size(); ++i ) {
         b[i]=1+(0.2*i);
-        cout<<b[i]<<endl;
     }
     
     

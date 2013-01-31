@@ -21,11 +21,11 @@ using namespace std;
 class OFDMEngine {
 public:
     OFDMEngine();
-    vector<double>* Modulate( unsigned char* data, long lDataLength );
-    void Demodulate( std::vector<double> *data, long lDataLength );
+    vector<double> Modulate( unsigned char* data, int iDataLength );
+    void Demodulate( std::vector<double> *data );
     double FrameDetect( std::vector<double>* data );
     void FFTTest();
-    vector<double>* GenerateHeader();
+    vector<double> GenerateHeader();
 
 //private:
     void normalize( double &val );

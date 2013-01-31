@@ -33,7 +33,7 @@ namespace MatrixHelper {
     
     // Function accepts an MxN vector in and returns its NxM transpose
     template <typename T>
-    extern vector<vector<T>> transpose2d(vector<vector<T>> &in) {
+    extern vector<vector<T>> transpose2d(vector<vector<T>> in) {
         // Initialize output vector
         vector<vector<T>> out;
         out.resize(in[0].size());
@@ -68,7 +68,7 @@ namespace MatrixHelper {
         }
         return out;
     } // end reshape2d()
-
+    
 } // end namespace MatrixHelper
 
 #endif /* defined(__OFDM__MatrixHelper__) */

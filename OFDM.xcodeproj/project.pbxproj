@@ -31,6 +31,7 @@
 		AA0DF67B16AE3C0600DF1597 /* MatrixHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MatrixHelper.h; sourceTree = "<group>"; };
 		AA753A2C16A5BDAD000A2B17 /* OFDM */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = OFDM; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA753A3016A5BDAD000A2B17 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		AAEFF22A16B8BB7300303953 /* MathHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MathHelper.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +70,7 @@
 				AA00C31116A7CD9400571EFE /* OFDMEngine.h */,
 				AA0DF67816AE388800DF1597 /* expection_definitions.h */,
 				AA0DF67B16AE3C0600DF1597 /* MatrixHelper.h */,
+				AAEFF22A16B8BB7300303953 /* MathHelper.h */,
 			);
 			path = OFDM;
 			sourceTree = "<group>";
