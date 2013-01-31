@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream> 
-#include <boost/range.hpp>
 #include "OFDMEngine.h"
 
 using namespace std;
@@ -21,41 +20,40 @@ double variance( vector<double> &in );
 
 // Hacky for now, will be unnecessary when we establish a
 // fixed buffer size
-long lDataLength= 16u;
+int iDataLength= 64;
 
 int main(int argc, const char * argv[])
 {
     
     OFDMEngine* pEngine= new OFDMEngine();
-    unsigned char data[16];
-    
-    vector<double> b( 16, 0 );
-    vector<double> x( 5, 1/5.0f );
-    
-    cout<<"b:"<<endl;
-    for( uint i=0; i<b.size(); ++i ) {
-        b[i]=1+(0.2*i);
-    }
-    
-    
-    vector<double> y= pEngine->filter(x, 1, b);
-    cout<<"y:"<<endl;
-    for( uint i=0; i<y.size(); ++i )
-        cout<<y[i]<<endl;
-
-    /*
+    unsigned char data[64];
      
     // Populate data
     // NOTE: I'm not sure if our input data is going to be a 1d array
     //       or a matrix, if it is a matrix, there is some additional
     //       reshaping that must take place (see w, h in matlab code)
     cout<<"Raw input data:"<<endl;
-    for( uint i=0; i<16; ++i ) {
+    for( uint i=0; i<64; ++i ) {
         data[i]= static_cast<unsigned char>(i+1);
         cout<<i<<": "<<static_cast<float>(data[i])<<endl;
     }
     unsigned char* pData= &data[0];
     
+    cout<<"Carriers:"<<endl;
+    for( uint i=0; i<CARRIER_COUNT; ++i )
+        cout<<CARRIERS[i]<<" ";
+    cout<<endl<<"Conj Carriers:"<<endl;
+    for( uint i=0; i<CARRIER_COUNT; ++i )
+        cout<<CONJ_CARRIERS[i]<<" ";
+    
+//    vector<double> demodData( 64, 0 );
+//    cout<<"input data:";
+//    for( uint i=0; i<demodData.size(); ++i ) {
+//        demodData[i]= i+1;
+//        cout<<demodData[i]<<endl;
+//    }
+//    
+//    pEngine->Demodulate( &demodData );
     
     ////////////////////////////////////////////////////////////////////////////////
     //
@@ -64,7 +62,7 @@ int main(int argc, const char * argv[])
     ////////////////////////////////////////////////////////////////////////////////
 
     // Generate header
-    vector<double>* header= pEngine->GenerateHeader();
+    vector<double> header= pEngine->GenerateHeader();
     // Frame guard of 0s
     vector<double> frameGuard( SYMB_PERIOD, 0 );
     // Time wave tx will store all data to be transmitted
@@ -73,29 +71,30 @@ int main(int argc, const char * argv[])
     double framePower= 0;
     
     long lModulatedData= 0;
-    while( lModulatedData < lDataLength ) {
-        long lFrameLen= 16;
-        vector<double>* timeSignalTx= pEngine->Modulate( &pData[lModulatedData], lFrameLen );
+    while( lModulatedData < iDataLength ) {
+        //long lFrameLen= 16;
+        int iFrameLen= min( static_cast<int>(SYMB_PER_FRAME*CARRIER_COUNT), iDataLength );
+        vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iFrameLen );
         
         // Append timeSignalTx and frameGuard to timeWaveTx
-        timeWaveTx.reserve(timeSignalTx->size()+frameGuard.size());
-        timeWaveTx.insert( timeWaveTx.end(), timeSignalTx->begin(), timeSignalTx->end() );
+        timeWaveTx.reserve( timeSignalTx.size()+frameGuard.size() );
+        timeWaveTx.insert( timeWaveTx.end(), timeSignalTx.begin(), timeSignalTx.end() );
         timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
         
         // Calculate frame power
         framePower= variance( timeWaveTx );
         
-        lModulatedData+= lFrameLen;
+        lModulatedData+= iFrameLen;
     }
     
     // Multiply header/trailer by power
-    for( uint i=0; i<header->size(); ++i )
-        (*header)[0]*= framePower;
+    for( uint i=0; i<header.size(); ++i )
+        header[i]*= framePower;
     
     // Add header/trailer to beginning and end of timeWaveTx
-    timeWaveTx.reserve( header->size()*2 );
-    timeWaveTx.insert( timeWaveTx.begin(), header->begin(), header->end() );
-    timeWaveTx.insert( timeWaveTx.end(), header->begin(), header->end() );
+    timeWaveTx.reserve( header.size()*2 );
+    timeWaveTx.insert( timeWaveTx.begin(), header.begin(), header.end() );
+    timeWaveTx.insert( timeWaveTx.end(), header.begin(), header.end() );
     
     
     ////////////////////////////////////////////////////////////////////////////////
@@ -105,16 +104,19 @@ int main(int argc, const char * argv[])
     ////////////////////////////////////////////////////////////////////////////////
     
     vector<double> timeWave;
+    vector<double> timeWaveRx( timeWaveTx );
+    
     uint uUnpad= 0,
          uStartX= 0,
-         uEndX= (uint)timeWaveTx.size();
+         uEndX= (uint)timeWaveRx.size();
+    bool bLastFrame= false;
     
-    if( lDataLength % CARRIER_COUNT != 0 )
-        uUnpad= CARRIER_COUNT - (lDataLength % CARRIER_COUNT);
+    if( iDataLength % CARRIER_COUNT != 0 )
+        uUnpad= CARRIER_COUNT - (iDataLength % CARRIER_COUNT);
     
-    uint uNumFrame= ceil( lDataLength * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / (SYMB_PER_FRAME*CARRIER_COUNT) );
+    uint uNumFrame= ceil( iDataLength * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / (SYMB_PER_FRAME*CARRIER_COUNT) );
     
-    vector<double>::iterator timeWaveTxIterator= timeWaveTx.begin();
+    vector<double>::iterator timeWaveRxIterator= timeWaveRx.begin();
     
     for( uint i=0; i<uNumFrame; ++i ) {
         uint uReserveSize= 0;
@@ -125,15 +127,30 @@ int main(int argc, const char * argv[])
         
         // Populate timeWave with uReserveSize elements from timeWaveTx
         timeWave.reserve(uReserveSize);
-        timeWave.insert(timeWave.end(), timeWaveTxIterator, timeWaveTxIterator+uReserveSize );
-        timeWaveTxIterator+= uReserveSize;
+        timeWave.insert(timeWave.end(), timeWaveRxIterator, timeWaveRxIterator+uReserveSize );
+        //timeWaveRxIterator+= uReserveSize;
         
         // Detect the data frame that only contains the useful information
+        // NOTE: We need to use OFDMFrameDetect() for this, but for now I
+        //       know where the frame begins because we have a perfect
+        //       simulated communication channel
+        int iFrameStart= distance( timeWaveRx.begin(), timeWaveRxIterator );
+        int iFrameEnd;
+        if( i==uNumFrame ) {
+            bLastFrame= true;
+            iFrameEnd= min( (double)uEndX, static_cast<double>( (iFrameStart-1) + SYMB_PERIOD*(1+ceil(remainder(1, CARRIER_COUNT*SYMB_PER_FRAME)/(double)CARRIER_COUNT)) ) );
+        } else
+            iFrameEnd= min( iFrameStart-1+(SYMB_PER_FRAME+1)*SYMB_PERIOD, uEndX );
         
+        // MATLAB: time_wave = time_wave_rx(frame_start:frame_end);
+        timeWave.resize( iFrameEnd-iFrameStart );
+        timeWaveRx.insert( timeWaveRx.begin(), timeWaveRx.begin()+iFrameStart, timeWaveRx.begin()+iFrameEnd );
+        
+        uStartX= iFrameEnd-SYMB_PERIOD;
+        
+        // Demodulate the received time signal
         
     }
-    
-     */
     
     return 0;
 }
@@ -152,11 +169,11 @@ unsigned char* readDataFromFile( const char* filename ) {
 	
 	//Get file length
 	fseek(file, 0, SEEK_END);
-	lDataLength= ftell(file);
+	iDataLength= ftell(file);
 	fseek(file, 0, SEEK_SET);
     
 	//Allocate memory
-	unsigned char* data=(unsigned char *)malloc(lDataLength+1);
+	unsigned char* data=(unsigned char *)malloc(iDataLength+1);
 	if (!data)
 	{
 		fprintf(stderr, "Memory error!");
@@ -165,7 +182,7 @@ unsigned char* readDataFromFile( const char* filename ) {
 	}
     
 	//Read file contents into buffer
-	fread(data, lDataLength, 1, file);
+	fread(data, iDataLength, 1, file);
 	fclose(file);
     
     return data;
@@ -183,7 +200,7 @@ bool writeDataToFile( unsigned char* data, const char *filename ) {
 		return false;
 	}
     
-    fwrite(data, sizeof(unsigned char), lDataLength, file);
+    fwrite(data, sizeof(unsigned char), iDataLength, file);
     fclose(file);
     
     return true;
