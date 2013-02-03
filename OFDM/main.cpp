@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream> 
+#include <boost/smart_ptr.hpp>
 #include "OFDMEngine.h"
 
 using namespace std;
@@ -20,20 +21,17 @@ double variance( vector<double> &in );
 
 // Hacky for now, will be unnecessary when we establish a
 // fixed buffer size
-int iDataLength= 64;
+int iDataLength= 256;
 
 int main(int argc, const char * argv[])
 {
     
     OFDMEngine* pEngine= new OFDMEngine();
-    unsigned char data[64];
+    unsigned char data[256];
      
     // Populate data
-    // NOTE: I'm not sure if our input data is going to be a 1d array
-    //       or a matrix, if it is a matrix, there is some additional
-    //       reshaping that must take place (see w, h in matlab code)
     cout<<"Raw input data:"<<endl;
-    for( uint i=0; i<64; ++i ) {
+    for( uint i=0; i<256; ++i ) {
         data[i]= static_cast<unsigned char>(i+1);
         cout<<i<<": "<<static_cast<float>(data[i])<<endl;
     }
@@ -46,15 +44,6 @@ int main(int argc, const char * argv[])
     for( uint i=0; i<CARRIER_COUNT; ++i )
         cout<<CONJ_CARRIERS[i]<<" ";
     
-//    vector<double> demodData( 64, 0 );
-//    cout<<"input data:";
-//    for( uint i=0; i<demodData.size(); ++i ) {
-//        demodData[i]= i+1;
-//        cout<<demodData[i]<<endl;
-//    }
-//    
-//    pEngine->Demodulate( &demodData );
-    
     ////////////////////////////////////////////////////////////////////////////////
     //
     //      OFDM Transmitter
@@ -63,39 +52,59 @@ int main(int argc, const char * argv[])
 
     // Generate header
     vector<double> header= pEngine->GenerateHeader();
+    
     // Frame guard of 0s
     vector<double> frameGuard( SYMB_PERIOD, 0 );
     // Time wave tx will store all data to be transmitted
     vector<double> timeWaveTx;
-    
+
     double framePower= 0;
-    
     long lModulatedData= 0;
-    while( lModulatedData < iDataLength ) {
-        //long lFrameLen= 16;
-        int iFrameLen= min( static_cast<int>(SYMB_PER_FRAME*CARRIER_COUNT), iDataLength );
-        vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iFrameLen );
+    int iSymbPerCarrier= ceil( iDataLength / static_cast<float>(CARRIER_COUNT) );
+    
+    // Check if we need multiple frames
+    if( iSymbPerCarrier > SYMB_PER_FRAME ) {
         
-        // Append timeSignalTx and frameGuard to timeWaveTx
-        timeWaveTx.reserve( timeSignalTx.size()+frameGuard.size() );
+        while( lModulatedData < iDataLength ) {
+            //long lFrameLen= 16;
+            int iFrameLen= 64;//min( static_cast<int>(SYMB_PER_FRAME*CARRIER_COUNT), iDataLength );
+            vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iFrameLen );
+            
+            // Append timeSignalTx and frameGuard to timeWaveTx
+            timeWaveTx.reserve( timeSignalTx.size()+frameGuard.size()*2 );
+            timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
+            timeWaveTx.insert( timeWaveTx.end(), timeSignalTx.begin(), timeSignalTx.end() );
+            timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
+            
+            // Calculate frame power
+            framePower= variance( timeWaveTx );
+            
+            lModulatedData+= iFrameLen;
+        }
+
+    } else {
+        // OFDM modulation
+        vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iDataLength );
+        
+        // Calculate frame power
+        framePower= variance( timeSignalTx );
+        
+        // Append timeSignalTx wrapped by frame guards to timeWaveTx
+        timeWaveTx.reserve( timeWaveTx.size() + frameGuard.size()*2 );
+        timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
         timeWaveTx.insert( timeWaveTx.end(), timeSignalTx.begin(), timeSignalTx.end() );
         timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
         
-        // Calculate frame power
-        framePower= variance( timeWaveTx );
-        
-        lModulatedData+= iFrameLen;
-    }
+    } // end else multiple frames
     
-    // Multiply header/trailer by power
+    // Scale header/trailer to match signal level
     for( uint i=0; i<header.size(); ++i )
         header[i]*= framePower;
     
-    // Add header/trailer to beginning and end of timeWaveTx
+    // Insert header and trailer to beginning and end of timeWaveTx
     timeWaveTx.reserve( header.size()*2 );
     timeWaveTx.insert( timeWaveTx.begin(), header.begin(), header.end() );
     timeWaveTx.insert( timeWaveTx.end(), header.begin(), header.end() );
-    
     
     ////////////////////////////////////////////////////////////////////////////////
     //
@@ -114,7 +123,7 @@ int main(int argc, const char * argv[])
     if( iDataLength % CARRIER_COUNT != 0 )
         uUnpad= CARRIER_COUNT - (iDataLength % CARRIER_COUNT);
     
-    uint uNumFrame= ceil( iDataLength * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / (SYMB_PER_FRAME*CARRIER_COUNT) );
+    uint uNumFrame= ceil( timeWaveRx.size() * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / (SYMB_PER_FRAME*CARRIER_COUNT) );
     
     vector<double>::iterator timeWaveRxIterator= timeWaveRx.begin();
     
