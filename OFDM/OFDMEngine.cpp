@@ -273,14 +273,14 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     signal_tx= MatrixHelper::transpose2d<double>( signal_tx );
     
     // Print matrix
-    cout<<"Signal tx transp:";
-    for( uint i=0; i<signal_tx.size(); ++i ) {
-        cout<<endl<<"Row "<<i<<": ";
-        for( uint j=0; j<signal_tx[0].size(); ++j ) {
-            cout<<signal_tx[i][j]<<", ";
-        }
-    }
-        
+//    cout<<"Signal tx transp:";
+//    for( uint i=0; i<signal_tx.size(); ++i ) {
+//        cout<<endl<<"Row "<<i<<": ";
+//        for( uint j=0; j<signal_tx[0].size(); ++j ) {
+//            cout<<signal_tx[i][j]<<", ";
+//        }
+//    }
+    
     vector<double> signal_tx_1d( signal_tx.size()*signal_tx[0].size(), 0 );
     // Populate signal_tx_1d column-wise
     uNumIter= 0;
@@ -471,15 +471,15 @@ double OFDMEngine::FrameDetect( std::vector<double>* data ) {
 
 // Function generates a header and trailer (exact copy of the header)
 vector<double> OFDMEngine::GenerateHeader() {
-    vector<double> header( 2*(IFFT_SIZE+GUARD_TIME), 0 );
+    vector<double> header( HEAD_LEN, 0 );
     double f= 0.25;
-    for( uint i=0; i<IFFT_SIZE+GUARD_TIME; ++i ) {
-        header[i]= sin(i*2*M_PI*f);
+    for( uint i=0; i<HEAD_LEN; ++i ) {
+        header[i]= sin( i*2*M_PI*f );
     }
     
-    f= f/(M_PI*2.0/3.0);
-    for( uint i= IFFT_SIZE+GUARD_TIME; i<2*(IFFT_SIZE+GUARD_TIME); ++i ) {
-        header[i]= sin(i*2*M_PI*f);
+    f= f / ( M_PI*2.0/3.0 );
+    for( uint i= 0; i<HEAD_LEN; ++i ) {
+        header[i]= header[i] + sin( i*2*M_PI*f );
     }
     
     return header;
