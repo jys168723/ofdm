@@ -32,6 +32,7 @@
 		AA753A2C16A5BDAD000A2B17 /* OFDM */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = OFDM; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA753A3016A5BDAD000A2B17 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		AAEFF22A16B8BB7300303953 /* MathHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MathHelper.h; sourceTree = "<group>"; };
+		AAF62B4316C4752300ED3D54 /* FFTHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FFTHelper.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +72,7 @@
 				AA0DF67816AE388800DF1597 /* expection_definitions.h */,
 				AA0DF67B16AE3C0600DF1597 /* MatrixHelper.h */,
 				AAEFF22A16B8BB7300303953 /* MathHelper.h */,
+				AAF62B4316C4752300ED3D54 /* FFTHelper.h */,
 			);
 			path = OFDM;
 			sourceTree = "<group>";
@@ -208,7 +210,10 @@
 		AA753A3716A5BDAD000A2B17 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				HEADER_SEARCH_PATHS = "lib/fftw-3.3.3";
+				HEADER_SEARCH_PATHS = (
+					"lib/fftw-3.3.3",
+					lib/boost_1_52_0,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -216,7 +221,10 @@
 		AA753A3816A5BDAD000A2B17 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				HEADER_SEARCH_PATHS = "lib/fftw-3.3.3";
+				HEADER_SEARCH_PATHS = (
+					"lib/fftw-3.3.3",
+					lib/boost_1_52_0,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
