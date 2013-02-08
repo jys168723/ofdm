@@ -22,9 +22,10 @@ class OFDMEngine {
 public:
     OFDMEngine();
     vector<double> Modulate( unsigned char* data, int iDataLength );
-    void Demodulate( std::vector<double> *data );
+    void Demodulate( std::vector<double> &symbRx );
     double FrameDetect( std::vector<double>* data );
     void FFTTest();
+    void FFTTest2();
     vector<double> GenerateHeader();
 
 //private:

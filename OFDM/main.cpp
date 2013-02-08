@@ -11,6 +11,7 @@
 #include <fstream> 
 #include <boost/smart_ptr.hpp>
 #include "OFDMEngine.h"
+#include "MatrixHelper.h"
 
 using namespace std;
 
@@ -27,8 +28,12 @@ int main(int argc, const char * argv[])
 {
     
     OFDMEngine* pEngine= new OFDMEngine();
+    
+    pEngine->FFTTest2();
+    return 0;
+    
     unsigned char data[256];
-     
+    
     // Populate data
     cout<<"Raw input data:"<<endl;
     for( uint i=0; i<256; ++i ) {
@@ -117,48 +122,48 @@ int main(int argc, const char * argv[])
     
     uint uUnpad= 0,
          uStartX= 0,
-         uEndX= (uint)timeWaveRx.size();
+         uEndX= (uint)timeWaveRx.size() - 1;
     bool bLastFrame= false;
     
     if( iDataLength % CARRIER_COUNT != 0 )
         uUnpad= CARRIER_COUNT - (iDataLength % CARRIER_COUNT);
     
-    uint uNumFrame= ceil( timeWaveRx.size() * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / (SYMB_PER_FRAME*CARRIER_COUNT) );
+    uint uNumFrame= ceil( iDataLength * (WORD_SIZE / static_cast<float>(SYMB_SIZE)) / static_cast<float>((SYMB_PER_FRAME*CARRIER_COUNT)) );
     
     vector<double>::iterator timeWaveRxIterator= timeWaveRx.begin();
     
     for( uint i=0; i<uNumFrame; ++i ) {
         uint uReserveSize= 0;
-        if( i == 1 )
+        if( i == 0 )
             uReserveSize= min( uEndX, (HEAD_LEN+SYMB_PERIOD * ( (SYMB_PER_FRAME + 1) / 2 + 1) ) );
         else
             uReserveSize= min( uEndX, ( (uStartX-1) + ( SYMB_PERIOD * ((SYMB_PER_FRAME + 1) / 2 + 1)) ) );
         
         // Populate timeWave with uReserveSize elements from timeWaveTx
-        timeWave.reserve(uReserveSize);
-        timeWave.insert(timeWave.end(), timeWaveRxIterator, timeWaveRxIterator+uReserveSize );
+        //timeWave.reserve(uReserveSize);
+        //timeWave.insert(timeWave.end(), timeWaveRxIterator, timeWaveRxIterator+uReserveSize );
         //timeWaveRxIterator+= uReserveSize;
         
         // Detect the data frame that only contains the useful information
-        // NOTE: We need to use OFDMFrameDetect() for this, but for now I
-        //       know where the frame begins because we have a perfect
-        //       simulated communication channel
-        int iFrameStart= distance( timeWaveRx.begin(), timeWaveRxIterator );
+        // NOTE: We need to use OFDMFrameDetect() for this when dealing with a
+        //       real communication channel, but for now I know where the frame
+        //       begins because we have a perfect simulated communication channel.
+        int iFrameStart= static_cast<int>( header.size()+frameGuard.size() );
         int iFrameEnd;
-        if( i==uNumFrame ) {
+        if( i==uNumFrame-1 ) {
             bLastFrame= true;
-            iFrameEnd= min( (double)uEndX, static_cast<double>( (iFrameStart-1) + SYMB_PERIOD*(1+ceil(remainder(1, CARRIER_COUNT*SYMB_PER_FRAME)/(double)CARRIER_COUNT)) ) );
+            iFrameEnd= min( (double)uEndX, static_cast<double>( (iFrameStart) + SYMB_PERIOD*(1+ceil(remainder(iDataLength, CARRIER_COUNT*SYMB_PER_FRAME)/(double)CARRIER_COUNT)) ) );
         } else
             iFrameEnd= min( iFrameStart-1+(SYMB_PER_FRAME+1)*SYMB_PERIOD, uEndX );
         
-        // MATLAB: time_wave = time_wave_rx(frame_start:frame_end);
-        timeWave.resize( iFrameEnd-iFrameStart );
-        timeWaveRx.insert( timeWaveRx.begin(), timeWaveRx.begin()+iFrameStart, timeWaveRx.begin()+iFrameEnd );
+        // Append data frame to timeWave
+        timeWave.reserve( iFrameEnd-iFrameStart );
+        timeWave.insert( timeWave.end(), timeWaveRx.begin()+iFrameStart, timeWaveRx.begin()+iFrameEnd );
         
         uStartX= iFrameEnd-SYMB_PERIOD;
         
         // Demodulate the received time signal
-        
+        pEngine->Demodulate(timeWave);
     }
     
     return 0;

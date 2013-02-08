@@ -14,6 +14,7 @@
 #include <algorithm>
 #include "MatrixHelper.h"
 #include "MathHelper.h"
+#include "FFTHelper.h"
 
 using namespace std;
 
@@ -82,8 +83,8 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     }
     
     // DEBUGGING - manually setting diff ref to match Matlab's
-    dataMatrix[0][0]=4;
-    dataMatrix[0][1]=1;
+    dataMatrix[0][0]=1;
+    dataMatrix[0][1]=4;
     //dataMatrix[0][2]=4;
     //dataMatrix[0][3]=4;
     
@@ -150,33 +151,21 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     
     // DEBUGGING: Print out matrix
     //cout<<"After assign IFFT bins:";
-    for( uint iRow=0; iRow<spectrumTx.size(); ++iRow ) {
-        //cout<<endl;
-        //cout<<"Row "<<iRow<<": ";
-        for( uint iCol=0; iCol<spectrumTx[0].size(); ++iCol ) {
-            double real= spectrumTx[iRow][iCol].real();
-            double imag= spectrumTx[iRow][iCol].imag();
-            normalize(real);
-            normalize(imag);
-            spectrumTx[iRow][iCol]= complex<double>(real, imag);
-            //cout<<real<<" + "<<imag<<"i, ";
-        }
-    }
-    
-    // Perform IFFT on conjugate transpose of spectrumTx
-    vector< vector<complex<double>> > spectrumTx_transp= MatrixHelper::conjTranspose2d<double>(spectrumTx);
-    
-    // DEBUGGING: print out matrix
-//    cout<<endl<<"Spectrum tx' pre ifft: "<<endl;
-//    cout<<"Dimensions: "<<spectrumTx_transp.size()<<" x "<<spectrumTx_transp[0].size()<<endl;
-//    for( uint iRow=0; iRow<spectrumTx_transp.size(); ++iRow ) {
-//        cout<<endl;
-//        cout<<"Row "<<iRow<<": ";
-//        for( uint iCol=0; iCol<spectrumTx_transp[0].size(); ++iCol ) {
-//            cout<<spectrumTx_transp[iRow][iCol].real()<<" + "<<spectrumTx_transp[iRow][iCol].imag()<<", ";
+//    for( uint iRow=0; iRow<spectrumTx.size(); ++iRow ) {
+//        //cout<<endl;
+//        //cout<<"Row "<<iRow<<": ";
+//        for( uint iCol=0; iCol<spectrumTx[0].size(); ++iCol ) {
+//            double real= spectrumTx[iRow][iCol].real();
+//            double imag= spectrumTx[iRow][iCol].imag();
+//            normalize(real);
+//            normalize(imag);
+//            spectrumTx[iRow][iCol]= complex<double>(real, imag);
+//            //cout<<real<<" + "<<imag<<"i, ";
 //        }
 //    }
     
+    // Perform IFFT on conjugate transpose of spectrumTx
+    vector< vector<complex<double>> > spectrumTx_transp= spectrumTx;//MatrixHelper::conjTranspose2d<double>(spectrumTx);
     
     ///////////////////////////////////////////////////////////
     //
@@ -210,33 +199,45 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     // Execute IFFT
     fftw_execute(p);
     
-    // signal_tx = real(in)
+//    cout<<"IFFT Result:"<<endl;
+//    for( uint i=0; i<nx*nc; ++i )
+//        cout<<in[i][0]<<", ";
+    
+    // Matlab: signal_tx = real(in)
     vector<vector<double>> signal_tx( nx, vector<double>(nc, 0) );
     for( uint i=0; i<nx; ++i ) {
         for( uint j=0; j<nc; ++j ) {
-            signal_tx[i][j]= in[i*nc+j][0];
+            signal_tx[i][j]= in[i*nc+j][0]/static_cast<float>(nx*nc);
         }
     }
     
+    cout<<"IFFT Result:"<<endl;
+    MatrixHelper::print2dVector(signal_tx);
+    
+    cout<< "FFT Input:"<<endl;
+    for( uint i=0; i<nx*nc; ++i ) {
+        cout<<in[i][0]<<" + "<<in[i][1]<<"i, ";
+    }
+    
     // DEBUGGING: Verify IFFT by taking FFT
-//    fftw_complex *out;
-//    out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nx*nc);
-//    fftw_plan p2 = fftw_plan_dft_2d(nx, nc, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-//    fftw_execute(p2);
-//   
-//    cout<<"Output:"<<endl;
-//    for( uint i=0; i<nx; ++i ) {
-//        cout<<endl;
-//        cout<<"Row "<<i<<": ";
-//        for( uint j=0; j<nc; ++j ) {
-//            double real= out[i*nc+j][0]/(nx*nc);
-//            double imag= out[i*nc+j][1]/(nx*nc);
-//            normalize(real);
-//            normalize(imag);
-//            cout<<real<<" + "<<imag<<"i, ";
-//            //cout<<out[i*nc+j][0]/(nx*nc)<<" + "<<out[i*nc+j][1]<<", ";
-//        }
-//    }
+    fftw_complex *out;
+    out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*nx*nc);
+    fftw_plan p2 = fftw_plan_dft_2d(nx, nc, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+    fftw_execute(p2);
+   
+    cout<<"Output:"<<endl;
+    for( uint i=0; i<nx; ++i ) {
+        cout<<endl;
+        cout<<"Row "<<i<<": ";
+        for( uint j=0; j<nc; ++j ) {
+            double real= out[i*nc+j][0]/(nx*nc);
+            double imag= out[i*nc+j][1]/(nx*nc);
+            normalize(real);
+            normalize(imag);
+            cout<<real<<" + "<<imag<<"i, ";
+            //cout<<out[i*nc+j][0]/(nx*nc)<<" + "<<out[i*nc+j][1]<<", ";
+        }
+    }
     
     // Transpose signal_tx
     signal_tx= MatrixHelper::transpose2d<double>( signal_tx );
@@ -246,15 +247,6 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     //      Add a periodic guard time
     //
     ///////////////////////////////////////////////////////////
-    
-    // Print matrix
-//    cout<<"Matrix without guard time:";
-//    for( uint i=0; i<signal_tx.size(); ++i ) {
-//        cout<<endl<<"Row "<<i<<": ";
-//        for( uint j=0; j<signal_tx[0].size(); ++j ) {
-//            cout<<signal_tx[i][j]<<", ";
-//        }
-//    }
     
     // Prepend columns (last_col - GUARD_TIME : last_col) to signal_tx
     // TODO: There is probably a better way to do this
@@ -272,76 +264,34 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     
     signal_tx= MatrixHelper::transpose2d<double>( signal_tx );
     
-    // Print matrix
-//    cout<<"Signal tx transp:";
-//    for( uint i=0; i<signal_tx.size(); ++i ) {
-//        cout<<endl<<"Row "<<i<<": ";
-//        for( uint j=0; j<signal_tx[0].size(); ++j ) {
-//            cout<<signal_tx[i][j]<<", ";
-//        }
-//    }
-    
-    vector<double> signal_tx_1d( signal_tx.size()*signal_tx[0].size(), 0 );
-    // Populate signal_tx_1d column-wise
-    uNumIter= 0;
-    for( uint j=0; j<signal_tx[0].size(); ++j ) {
-        for( uint i=0; i<signal_tx.size(); ++i ) {
-            signal_tx_1d[uNumIter]=signal_tx[i][j];
-            ++uNumIter;
-        }
-    }
-    
-//    cout<<"Signal tx 1d"<<endl;
-//    for( uint i=0; i<signal_tx_1d.size(); ++i )
-//        cout<<signal_tx_1d[i]<<", ";
-    
-    return signal_tx_1d;
+    return MatrixHelper::reshape2dTo1d(signal_tx);
 }
 
-void OFDMEngine::Demodulate( std::vector<double> *symbRx ) {
+void OFDMEngine::Demodulate( std::vector<double> &symbRx ) {
    
     uint uSymbPeriod= IFFT_SIZE + GUARD_TIME;
     
     // Reshape the linear time waveform into FFT segments
-    uint uNumCol= floor( symbRx->size()/(float)uSymbPeriod );
-    vector<vector<double>> symbRxMatrix(uSymbPeriod, vector<double>(uNumCol, 0));
-
-    uint uNumIter= 0;
-    for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
-        for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
-            symbRxMatrix[iRow][iCol]= (*symbRx)[uNumIter];
-            ++uNumIter;
-        }
-    }
-    
-    // DEBUGGING: Print out matrix
-    cout<<"SymbRxMatrix:";
-    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
-        cout<<endl;
-        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
-            cout<<symbRxMatrix[iRow][iCol]<<", ";
-        }
-    }
+    int iNumCol= floor( symbRx.size()/(float)uSymbPeriod );
+    vector<vector<double>> symbRxMatrix= MatrixHelper::columnwiseReshape1d(symbRx, uSymbPeriod, iNumCol);
     
     // Remove the periodic guard time
-    for( uint i=0; i<GUARD_TIME; ++i )
-        symbRxMatrix.erase( symbRxMatrix.begin() );
+    symbRxMatrix.erase( symbRxMatrix.begin(), symbRxMatrix.begin()+GUARD_TIME );
     
-    // DEBUGGING: Print out matrix
-    cout<<"SymbRxMatrix:";
-    for( uint iRow=0; iRow<symbRxMatrix.size(); ++iRow ) {
-        cout<<endl;
-        for( uint iCol=0; iCol<symbRxMatrix[0].size(); ++iCol ) {
-            cout<<symbRxMatrix[iRow][iCol]<<", ";
-        }
-    }
-    
+    // Create a matrix of complex data for FFT input. Set all imaginary values to 0
+//    vector<vector<complex<double>>> fftInputMatrix( symbRxMatrix.size(), vector<complex<double>>( symbRxMatrix[0].size(), 0) );
+//    for( uint iRow=0; iRow<fftInputMatrix.size(); ++iRow ) {
+//        for( uint iCol=0; iCol<fftInputMatrix[0].size(); ++iCol ) {
+//            fftInputMatrix[iRow][iCol]= complex<double>( symbRxMatrix[iRow][iCol], 0 );
+//        }
+//    }
+
     // Take FFT of the received time wave to obtain data spectrum
-    int nc= static_cast<int>( symbRxMatrix[0].size()/2.0f + 1 );
     int ny= static_cast<int>( symbRxMatrix[0].size() );
+    int nc= ny / 2.0f + 1;
     int nx= static_cast<int>( symbRxMatrix.size() );
     fftw_complex *fftResult= (fftw_complex*)fftw_malloc( nc*nx*sizeof(fftw_complex) );
-    double *fftInput= (double*)&symbRxMatrix;
+    double *fftInput= (double*)&symbRxMatrix[0][0];
     
     fftw_plan fftPlan= fftw_plan_dft_r2c_2d( nx, ny, fftInput, fftResult, FFTW_ESTIMATE );
     fftw_execute(fftPlan);
@@ -350,12 +300,12 @@ void OFDMEngine::Demodulate( std::vector<double> *symbRx ) {
     cout<<"\nFFT result: ";
     for( uint i=0; i<nx; ++i ) {
         cout<<endl;
-        for( uint j=0; j<ny; ++j ) {
-            double real= fftResult[i*nc+j][0]/(nx*ny);
-            double imag= fftResult[i*nc+j][1]/(nx*ny);
+        for( uint j=0; j<nc; ++j ) {
+            double real= fftResult[i*nc+j][0]/(nx*nc);
+            double imag= fftResult[i*nc+j][1]/(nx*nc);
             normalize(real);
             normalize(imag);
-            cout<<real<<" + "<<imag<<", ";
+            cout<<real<<" + "<<imag<<"i, ";
         }
     }
     
@@ -520,3 +470,120 @@ vector<double> OFDMEngine::filter( vector<double> &b, double a, vector<double> &
     }
     return y;
 } // end OFDMEngine::filter()
+
+
+
+void OFDMEngine::FFTTest2() {
+    int rows=16;
+    
+    vector<complex<double>> in(rows, 0);
+    in[0]= complex<double>(1, 0);
+    in[1]= complex<double>(-1, 0);
+    in[2]= complex<double>(-1, 0);
+    in[3]= complex<double>(0, 0);
+    in[4]= complex<double>(0, -1);
+    in[5]= complex<double>(0, 1);
+    in[6]= complex<double>(1, 0);
+    in[7]= complex<double>(1, 0);
+    in[8]= complex<double>(1, 0);
+    in[9]= complex<double>(1, 1);
+    in[10]= complex<double>(-1, 0);
+    in[11]= complex<double>(-1, 1);
+    in[12]= complex<double>(-1, -1);
+    in[13]= complex<double>(0, 0);
+    in[14]= complex<double>(1, 0);
+    in[15]= complex<double>(1, 1);
+    
+    //vector<complex<double>> outVec= FFTHelper::fft_complex_1d<double>(in, true);
+    //MatrixHelper::print1dVector(outVec, true);
+    
+    vector<complex<double>> in2(rows, 0);
+    in2[0]= complex<double>(-1, 1);
+    in2[1]= complex<double>(-1, 0);
+    in2[2]= complex<double>(-1, 0);
+    in2[3]= complex<double>(0, 1);
+    in2[4]= complex<double>(0, 1);
+    in2[5]= complex<double>(0, -1);
+    in2[6]= complex<double>(-1, 1);
+    in2[7]= complex<double>(-1, -1);
+    in2[8]= complex<double>(-1, 0);
+    in2[9]= complex<double>(0, 0);
+    in2[10]= complex<double>(0, 1);
+    in2[11]= complex<double>(0, -1);
+    in2[12]= complex<double>(1, -1);
+    in2[13]= complex<double>(1, 1);
+    in2[14]= complex<double>(1, 0);
+    in2[15]= complex<double>(-1, -1);
+    
+    vector<vector<complex<double>>> inVec(2, vector<complex<double>>(16, 0));
+    inVec[0]= in;
+    inVec[1]= in2;
+    
+    cout<<"\nIn:\n";
+    MatrixHelper::print2dVector(inVec);
+    
+    vector<vector<complex<double>>> outVec= FFTHelper::fft_complex_2d(inVec, true);
+    cout<<"\nOut\n";
+    MatrixHelper::print2dVector(outVec);
+    
+    cout<<"in and in2:"<<endl;
+    for( uint i=0; i<16; ++i )
+        cout<<in[i]<<" "<<in2[i]<<endl;
+    
+    fftw_complex *out= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*rows);
+    fftw_complex *out2= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*rows);
+    
+    fftw_plan p= fftw_plan_dft_1d(rows, (fftw_complex*)&in[0], out, FFTW_BACKWARD, FFTW_ESTIMATE);
+    fftw_plan p2= fftw_plan_dft_1d(rows, (fftw_complex*)&in2[0], out2, FFTW_BACKWARD, FFTW_ESTIMATE);
+    
+    fftw_execute(p);
+    fftw_execute(p2);
+    
+    cout<<"out and out2:\n";
+    for( uint i=0; i<16; ++i )
+        cout<<out[i][0]/16.0f<<" + "<<out[i][1]/16.0f<<"i"<<", "<<out2[i][0]/16.0f<<" + "<<out2[i][1]/16.0f<<endl;
+    
+    vector<vector<complex<double>>> y(2, vector<complex<double>>(16, 0));
+
+    y[0]= in;
+    y[1]= in2;
+    y= MatrixHelper::transpose2d(y);
+    cout<<"y:";
+    MatrixHelper::print2dVector(y);
+    
+    fftw_complex *out2d= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*16*2);
+    fftw_complex *in2d= (fftw_complex*)fftw_malloc(sizeof(fftw_complex)*16*2);
+    
+    for( uint i=0; i<16; ++i ) {
+        cout<<endl;
+        for( uint j=0; j<2; ++j ) {
+            if( j==0 ) {
+                in2d[i*2+j][0]= in[i].real();
+                in2d[i*2+j][1]= in[i].imag();
+            } else {
+                in2d[i*2+j][0]= in2[i].real();
+                in2d[i*2+j][1]= in2[i].imag();
+            }
+            cout<<in2d[i*2+j][0]<<" + "<<in2d[i*2+j][1]<<"i  ";
+        }
+    }
+    
+    
+    
+    fftw_plan p2d= fftw_plan_dft_2d(16, 2, in2d, in2d, FFTW_BACKWARD, FFTW_ESTIMATE);
+    
+    fftw_execute(p2d);
+    
+    cout<<"\n2D IFFT Result:"<<endl;
+    //MatrixHelper::print2dVector(outMatrix);
+    uint uNumIter= 0;
+    for( uint i=0; i<16; ++i ) {
+        cout<<endl;
+        for( uint j=0; j<2; ++j ) {
+            cout<<"("<<i<<", "<<j<<") "<<in2d[i*2+j][0]/16.0f<<" + "<<in2d[i*2+j][1]/16.0f<<"i, ";
+            ++uNumIter;
+        }
+    }
+}
+
+
