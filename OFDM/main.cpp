@@ -27,11 +27,7 @@ int iDataLength= 256;
 int main(int argc, const char * argv[])
 {
     
-    OFDMEngine* pEngine= new OFDMEngine();
-    
-    pEngine->FFTTest2();
-    return 0;
-    
+    OFDMEngine* pEngine= new OFDMEngine();    
     unsigned char data[256];
     
     // Populate data
@@ -74,6 +70,9 @@ int main(int argc, const char * argv[])
             //long lFrameLen= 16;
             int iFrameLen= 64;//min( static_cast<int>(SYMB_PER_FRAME*CARRIER_COUNT), iDataLength );
             vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iFrameLen );
+            
+            cout<<"timeSignalTx:"<<endl;
+            MatrixHelper::print1dVector(timeSignalTx);
             
             // Append timeSignalTx and frameGuard to timeWaveTx
             timeWaveTx.reserve( timeSignalTx.size()+frameGuard.size()*2 );

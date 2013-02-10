@@ -36,6 +36,7 @@ namespace FFTHelper {
         return outVector;
     }
     
+    // Takes a column-wise 2D fft of in. Identical to Matlab fft
     template <typename T>
     extern vector<vector<complex<T>>> fft_complex_2d( vector<vector<complex<T>>> &in, bool isIfft ) {
         int nx= (int)in.size();
@@ -43,11 +44,15 @@ namespace FFTHelper {
         
         vector<vector<complex<T>>> out( nx, vector<complex<T>>(ny, 0) );
         
-        for( uint i=0; i<nx; ++i ) {
-            vector<complex<T>> fftResult= fft_complex_1d( in[i], isIfft );
+        for( uint iCol=0; iCol<ny; ++iCol ) {
+            vector<complex<T>> fftInput( nx, 0 );
+            for( uint iRow=0; iRow<nx; ++iRow )
+                fftInput[iRow]= in[iRow][iCol];
             
-            for( uint j=0; j<ny; ++j )
-                out[i][j]= fftResult[j];
+            vector<complex<T>> fftResult= fft_complex_1d( fftInput, isIfft );
+            
+            for( uint iRow=0; iRow<nx; ++iRow )
+                out[iRow][iCol]= fftResult[iRow];
         }
         
         return out;
