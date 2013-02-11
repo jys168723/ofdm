@@ -72,7 +72,7 @@ int main(int argc, const char * argv[])
             vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iFrameLen );
             
             cout<<"timeSignalTx:"<<endl;
-            MatrixHelper::print1dVector(timeSignalTx);
+            MatrixHelper::print_vector(timeSignalTx);
             
             // Append timeSignalTx and frameGuard to timeWaveTx
             timeWaveTx.reserve( timeSignalTx.size()+frameGuard.size()*2 );
@@ -119,6 +119,9 @@ int main(int argc, const char * argv[])
     vector<double> timeWave;
     vector<double> timeWaveRx( timeWaveTx );
     
+    cout<<"timewaverx:"<<endl;
+    MatrixHelper::print_vector(timeWaveRx, true);
+    
     uint uUnpad= 0,
          uStartX= 0,
          uEndX= (uint)timeWaveRx.size() - 1;
@@ -161,6 +164,8 @@ int main(int argc, const char * argv[])
         
         uStartX= iFrameEnd-SYMB_PERIOD;
         
+        cout<<"timeWave:"<<endl;
+        MatrixHelper::print_vector(timeWave, true);
         // Demodulate the received time signal
         pEngine->Demodulate(timeWave);
     }

@@ -24,12 +24,9 @@ public:
     vector<double> Modulate( unsigned char* data, int iDataLength );
     void Demodulate( std::vector<double> &symbRx );
     double FrameDetect( std::vector<double>* data );
-    void FFTTest();
-    void FFTTest2();
     vector<double> GenerateHeader();
 
 //private:
-    void normalize( double &val );
     vector<double> filter( vector<double> &b, double a, vector<double> &x );
 };
 

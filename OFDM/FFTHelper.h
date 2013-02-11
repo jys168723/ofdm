@@ -16,8 +16,8 @@ using namespace std;
 
 namespace FFTHelper {
     template <typename T>
-    extern vector<complex<T>> fft_complex_1d( vector<complex<T>> &in, bool isIfft ) {
-        int n= in.size();
+    extern vector<complex<T>> fft_complex_1d( vector<complex<T>> &in, bool isIfft, bool bScale ) {
+        int n= static_cast<int>( in.size() );
         
         fftw_complex *fftOut= (fftw_complex*)fftw_malloc( n*sizeof(fftw_complex) );
         
@@ -30,15 +30,20 @@ namespace FFTHelper {
         fftw_execute(fftPlan);
         
         vector<complex<T>> outVector( n, 0 );
-        for( uint i=0; i<n; ++i )
-            outVector[i]= complex<T>( fftOut[i][0]/(float)n, fftOut[i][1]/(float)n );
+        for( uint i=0; i<n; ++i ) {
+            if( bScale )
+                outVector[i]= complex<T>( fftOut[i][0]/(float)n, fftOut[i][1]/(float)n );
+            else
+                outVector[i]= complex<T>( fftOut[i][0], fftOut[i][1] );
+        }
+            
         
         return outVector;
     }
     
     // Takes a column-wise 2D fft of in. Identical to Matlab fft
     template <typename T>
-    extern vector<vector<complex<T>>> fft_complex_2d( vector<vector<complex<T>>> &in, bool isIfft ) {
+    extern vector<vector<complex<T>>> fft_complex_2d( vector<vector<complex<T>>> &in, bool isIfft, bool bScale ) {
         int nx= (int)in.size();
         int ny= (int)in[0].size();
         
@@ -49,7 +54,7 @@ namespace FFTHelper {
             for( uint iRow=0; iRow<nx; ++iRow )
                 fftInput[iRow]= in[iRow][iCol];
             
-            vector<complex<T>> fftResult= fft_complex_1d( fftInput, isIfft );
+            vector<complex<T>> fftResult= fft_complex_1d( fftInput, isIfft, bScale );
             
             for( uint iRow=0; iRow<nx; ++iRow )
                 out[iRow][iCol]= fftResult[iRow];
