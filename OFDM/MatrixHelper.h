@@ -205,6 +205,23 @@ namespace MatrixHelper {
         return out;
     } // end function diff()
     
+    
+    // Function calculates the variance of a 1d vector of doubles
+    inline double variance( vector<double> &in ) {
+        double total= 0;
+        for( uint i=0; i<in.size(); ++i ) {
+            total+= in[i];
+        }
+        double avg= total / static_cast<double>(in.size());
+        
+        double var= 0;
+        for( uint i=0; i<in.size(); ++i ) {
+            var+= pow( avg-in[i], 2 );
+        }
+        return var / static_cast<double>(in.size());
+    } // end function variance()
+    
+    
 } // end namespace MatrixHelper
 
 #endif /* defined(__OFDM__MatrixHelper__) */

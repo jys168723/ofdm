@@ -22,21 +22,26 @@ double variance( vector<double> &in );
 
 // Hacky for now, will be unnecessary when we establish a
 // fixed buffer size
-int iDataLength= 256;
+int iDataLength= 1800;
 
 int main(int argc, const char * argv[])
 {
+    int iDiffRef0, iDiffRef1= 0;
+    cout<<"\nDiff ref 0: ";
+    cin>>iDiffRef0;
+    cout<<"\nDiff ref 1: ";
+    cin>>iDiffRef1;
     
-    OFDMEngine* pEngine= new OFDMEngine();    
-    unsigned char data[256];
+    OFDMEngine* pEngine= new OFDMEngine( iDiffRef0, iDiffRef1 );
+    unsigned char inData[iDataLength];
     
     // Populate data
-    cout<<"Raw input data:"<<endl;
-    for( uint i=0; i<256; ++i ) {
-        data[i]= static_cast<unsigned char>(i+1);
-        cout<<i<<": "<<static_cast<float>(data[i])<<endl;
+    //cout<<"Raw input data:"<<endl;
+    for( uint i=0; i<iDataLength; ++i ) {
+        inData[i]= static_cast<unsigned char>(i+1);
+        //cout<<i<<": "<<static_cast<float>(data[i])<<endl;
     }
-    unsigned char* pData= &data[0];
+    unsigned char* pData= &inData[0];
     
     cout<<"Carriers:"<<endl;
     for( uint i=0; i<CARRIER_COUNT; ++i )
@@ -81,7 +86,7 @@ int main(int argc, const char * argv[])
             timeWaveTx.insert( timeWaveTx.end(), frameGuard.begin(), frameGuard.end() );
             
             // Calculate frame power
-            framePower= variance( timeWaveTx );
+            framePower= MatrixHelper::variance( timeWaveTx );
             
             lModulatedData+= iFrameLen;
         }
@@ -91,7 +96,7 @@ int main(int argc, const char * argv[])
         vector<double> timeSignalTx= pEngine->Modulate( &pData[lModulatedData], iDataLength );
         
         // Calculate frame power
-        framePower= variance( timeSignalTx );
+        framePower= MatrixHelper::variance( timeSignalTx );
         
         // Append timeSignalTx wrapped by frame guards to timeWaveTx
         timeWaveTx.reserve( timeWaveTx.size() + frameGuard.size()*2 );
@@ -126,6 +131,8 @@ int main(int argc, const char * argv[])
          uStartX= 0,
          uEndX= (uint)timeWaveRx.size() - 1;
     bool bLastFrame= false;
+    vector<double> phase;
+    vector<double> data;
     
     if( iDataLength % CARRIER_COUNT != 0 )
         uUnpad= CARRIER_COUNT - (iDataLength % CARRIER_COUNT);
@@ -167,8 +174,18 @@ int main(int argc, const char * argv[])
         cout<<"timeWave:"<<endl;
         MatrixHelper::print_vector(timeWave, true);
         // Demodulate the received time signal
-        pEngine->Demodulate(timeWave);
-    }
+        pEngine->Demodulate(timeWave, false, 0);
+        
+        vector<double> phaseRx= pEngine->GetPhase();
+        vector<double> dataRx= pEngine->GetDataRx();
+        
+        // Append phaseRx and dataRx to phase and data
+        phase.reserve( phaseRx.size() );
+        phase.insert( phase.end(), phaseRx.begin(), phaseRx.end() );
+        data.reserve( dataRx.size() );
+        data.insert( data.begin(), dataRx.begin(), dataRx.end() );
+        
+    } // end for each frame
     
     return 0;
 }
@@ -224,17 +241,4 @@ bool writeDataToFile( unsigned char* data, const char *filename ) {
     return true;
 }
 
-// Function calculates the variance of a 1d vector of doubles
-double variance( vector<double> &in ) {
-    double total= 0;
-    for( uint i=0; i<in.size(); ++i ) {
-        total+= in[i];
-    }
-    double avg= total / static_cast<double>(in.size());
-    
-    double var= 0;
-    for( uint i=0; i<in.size(); ++i ) {
-        var+= pow( avg-in[i], 2 );
-    }
-    return var / static_cast<double>(in.size());
-}
+

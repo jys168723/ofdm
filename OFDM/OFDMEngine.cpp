@@ -18,9 +18,17 @@
 
 using namespace std;
 
-OFDMEngine::OFDMEngine() {
-    
-}
+OFDMEngine::OFDMEngine() :
+m_dataRx( vector<double>() ),
+m_phase( vector<double>() ),
+m_iDiffRef0(0),
+m_iDiffRef1(0) { }
+
+OFDMEngine::OFDMEngine( int diffRef0, int diffRef1 ) :
+m_dataRx( vector<double>() ),
+m_phase( vector<double>() ),
+m_iDiffRef0(diffRef0),
+m_iDiffRef1(diffRef1) { }
 
 // Function takes in byte data, modulates it, and returns a pointer to the
 // modulated, double-precision data
@@ -73,8 +81,8 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
     }
     
     // DEBUGGING - manually setting diff ref to match Matlab's
-    dataMatrix[0][0]=1;
-    dataMatrix[0][1]=1;
+    dataMatrix[0][0]= m_iDiffRef0;
+    dataMatrix[0][1]= m_iDiffRef1;
     //dataMatrix[0][2]=4;
     //dataMatrix[0][3]=4;
     
@@ -174,7 +182,7 @@ vector<double> OFDMEngine::Modulate( unsigned char *pData, int iDataLength ) {
 } // end function Modulate()
 
 
-void OFDMEngine::Demodulate( std::vector<double> &symbRx ) {
+void OFDMEngine::Demodulate( std::vector<double> &symbRx, bool bLastFrame, int iUnpad ) {
     
     uint uSymbPeriod= IFFT_SIZE + GUARD_TIME;
     
@@ -230,11 +238,44 @@ void OFDMEngine::Demodulate( std::vector<double> &symbRx ) {
     // Make negative phases positive
     for( uint iRow=0; iRow<decoded_phase.size(); ++iRow ) {
         for( uint iCol=0; iCol<decoded_phase[0].size(); ++iCol ) {
-            decoded_phase[iRow][iCol]= MathHelper::rem( decoded_phase[iRow][iCol]+360, 360 );
+            decoded_phase[iRow][iCol]= MathHelper::rem( static_cast<double>(decoded_phase[iRow][iCol]+360.0f), 360.0 );
         }
     }
     
-    MatrixHelper::print_vector(decoded_phase);
+    vector<double> decoded_phase_1d= MatrixHelper::flatten(decoded_phase, false);
+    
+    cout<<"decoded_phase_1d"<<endl;
+    MatrixHelper::print_vector(decoded_phase_1d, true);
+    
+    // Phase-to-data classification
+    double base_phase= 360.0/pow(2, SYMB_SIZE);
+    
+    // Phase-to-data translation
+    vector<double> decoded_symb( decoded_phase_1d.size(), 0 );
+    for( uint i=0; i<decoded_symb.size(); ++i ) {
+        decoded_symb[i]= floor( MathHelper::rem((decoded_phase_1d[i]/base_phase+0.5f), pow(2, SYMB_SIZE)) );
+    }
+    
+    cout<<"decoded_symb:\n";
+    MatrixHelper::print_vector(decoded_symb);
+    
+    // Obtain decoded phasese for error calculations
+    for( uint i=0; i<decoded_phase_1d.size(); ++i ) {
+        decoded_phase_1d[i]= MathHelper::rem( decoded_phase_1d[i]/base_phase+0.5, pow(2, SYMB_SIZE) )*base_phase - 0.5*base_phase;
+    }
+    
+    cout<<"decoded_phase_1d\n";
+    MatrixHelper::print_vector(decoded_phase_1d, true);
+    
+    // Remove padded zeros from modulation
+    if( bLastFrame ) {
+        decoded_symb.erase( decoded_symb.end()-iUnpad, decoded_symb.end() );
+        decoded_phase_1d.erase( decoded_phase_1d.end()-iUnpad, decoded_phase_1d.end() );
+    }
+    
+    // Assign data and phase to member vars for retrieval
+    m_dataRx= decoded_symb;
+    m_phase= decoded_phase_1d;
 }
 
 
